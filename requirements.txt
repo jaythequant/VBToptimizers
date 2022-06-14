@@ -1,0 +1,2 @@
+vectorbt==0.23.3
+timedelta==2020.12.3
