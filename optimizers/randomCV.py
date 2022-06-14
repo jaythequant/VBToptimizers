@@ -95,8 +95,14 @@ def randomSearch(
         * The best parameters total return
     """
 
-    close_train_dfs, _ = vbt_cv_kfold_constructor(close_data_set, n_splits=n_splits)
-    open_train_dfs, _ = vbt_cv_kfold_constructor(open_data_set, n_splits=n_splits)
+    close_train_dfs, close_test_data = vbt_cv_kfold_constructor(close_data_set, n_splits=n_splits)
+    open_train_dfs, open_test_data = vbt_cv_kfold_constructor(open_data_set, n_splits=n_splits)
+
+    # Extract the testing datasets from program and remove from memory
+    close_test_data.to_csv("close_test_data.csv")
+    open_test_data.to_csv("open_test_data.csv")
+    del close_test_data
+    del open_test_data
 
     sample_set = generate_random_sample(n_iter=n_iter) # Random sample set of site n_iter created
 
