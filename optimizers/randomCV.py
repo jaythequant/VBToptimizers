@@ -92,13 +92,19 @@ if __name__ == "__main__":
 
     logging.info("Initializing training session . . . ")
 
-    closes = pd.read_csv("data/crypto_close_data.csv", index_col="time")
-    opens = pd.read_csv("data/crypto_open_data.csv", index_col="time")
-
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")
+    
     close_train_dfs, close_test_dfs = vbt_cv_kfold_constructor(closes, n_splits=5)
     open_train_dfs, open_test_dfs = vbt_cv_kfold_constructor(opens, n_splits=5)
 
-    sample_set = generate_random_sample(n_iter=100)
+    sample_set = generate_random_sample(n_iter=1000)
+
+    # Initialize an empty dataframe to store records 
+    df = pd.DataFrame(columns=[
+        "period", "upper", "lower", "exit", 
+        "delta","vt", "wr", "ret",
+    ]) 
 
     best_comb = None
     best_wr = None
@@ -111,19 +117,27 @@ if __name__ == "__main__":
                 best_comb = sample
                 best_wr = wr
                 best_ret = ret
-                logging.info(best_comb)
+                logging.info("Initial params:", best_comb)
                 logging.info(f"Score: {wr:.4f}")
                 logging.info(f"Return: {ret:.4f}")
             if wr > best_wr:
                 best_comb = sample
                 best_wr = wr
                 best_ret = ret
-                logging.info("New best wr")
+                logging.info("New best param:", best_comb)
                 logging.info(f"Score: {wr:.4f}")
                 logging.info(f"Return: {ret:.4f}")
+            # Wrap a dictionary with param details + win rate and total return info in a dataframe
+            r = pd.DataFrame.from_dict(
+                sample.update({"wr": wr, "ret": ret}), orient="index"
+            ).T 
+            # Add to dataframe containing records of all params tested
+            df = pd.concat([df, r]) 
+
+    df.to_csv("res.csv") # Export the results to a CSV for review later
 
     logging.info("Tests complete:")
     logging.info("Optimized parameters:", best_comb)
     logging.info(f"Score: {wr:.4f}")
-    logging.info(f"Return: {ret:.4f}")
+    logging.info(f"Return: {ret}")
     logging.info("Shutting down training session")
