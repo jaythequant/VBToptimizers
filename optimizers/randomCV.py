@@ -2,6 +2,7 @@ import pandas as pd
 import concurrent.futures
 from itertools import repeat
 import logging
+import gc
 
 from setup.order_funcs import simulate_from_order_func
 from utils.cross_validators import vbt_cv_kfold_constructor
@@ -50,6 +51,9 @@ def testParams(
         )
 
         test_res.append(pf)
+        # For some reason the pf object does not get collected normally
+        # As such we need to manual call `gc.collect` to prevent memory bloat
+        gc.collect() 
 
     wr = score_results(test_res)
     total_return = return_results(test_res)
@@ -95,14 +99,8 @@ def randomSearch(
         * The best parameters total return
     """
 
-    close_train_dfs, close_test_data = vbt_cv_kfold_constructor(close_data_set, n_splits=n_splits)
-    open_train_dfs, open_test_data = vbt_cv_kfold_constructor(open_data_set, n_splits=n_splits)
-
-    # Extract the testing datasets from program and remove from memory
-    close_test_data.to_csv("close_test_data.csv")
-    open_test_data.to_csv("open_test_data.csv")
-    del close_test_data
-    del open_test_data
+    close_train_dfs, _ = vbt_cv_kfold_constructor(close_data_set, n_splits=n_splits)
+    open_train_dfs, _ = vbt_cv_kfold_constructor(open_data_set, n_splits=n_splits)
 
     sample_set = generate_random_sample(n_iter=n_iter) # Random sample set of site n_iter created
 
@@ -152,10 +150,10 @@ if __name__ == "__main__":
 
     logging.info("Initializing training session . . . ")
 
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[:700_000]
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[:700_000]
 
-    best_comb, wr, ret = randomSearch(closes, opens, workers=5, n_iter=10_000, n_splits=5)
+    best_comb, wr, ret = randomSearch(closes, opens, workers=4, n_iter=5000, n_splits=5)
 
     logging.info("Tests complete:")
     logging.info("Optimized parameters:", best_comb)

@@ -76,7 +76,7 @@ def generate_random_sample(n_iter=100):
         random_sample = {
             "period": round(np.random.uniform(low=30, high=60), 0) * 1_000,
             "upper": round(np.random.uniform(low=2.0, high=5.1), 1),
-            "lower": round(np.random.uniform(low=2.0, high=5.1), 1),
+            "lower": round(np.random.uniform(low=2.0, high=5.1), 1) * -1,
             "exit": round(np.random.uniform(low=0.3, high=2.0), 1),
             "delta": round(np.random.choice(0.1 ** np.arange(1, 10, dtype=np.float_)), 10),
             "vt": round(np.random.uniform(low=0.1, high=1.0), 1),
