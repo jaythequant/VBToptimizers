@@ -68,7 +68,7 @@ def extract_duration(pf, interval) -> int:
     return dur_ser
 
 
-def generate_random_sample(n_iter=100):
+def generate_random_sample(n_iter=100, require_unique=True):
     """Generate a set of random samples"""
     samples = [] 
 
@@ -113,3 +113,21 @@ def return_results(test_results):
         rets.append(r)
     
     return np.mean(rets)
+
+
+def number_of_trades(pf) -> pd.Series:
+    """Extracts number of trades from multi-combination portfolio object"""
+    trades = pf.trades.records_readable
+    trades["Column"] = trades["Column"].str[:-1]
+    g = trades.groupby("Column")
+
+    num_trades = {}
+
+    for idx, gr in g:
+        grouped_trades = gr.groupby("Entry Timestamp").sum()
+        trade_count = grouped_trades.shape[0] / 2
+        num_trades[idx] = trade_count
+
+    trades_ser = pd.Series(num_trades.values(), index=num_trades.keys(), name="trade_count")
+
+    return trades_ser
