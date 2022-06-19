@@ -107,7 +107,7 @@ def geneticCV(
         highest_wr = most_recent_results.fitness.max()
         average_wr = most_recent_results.fitness.mean()
         s = highest_wr - average_wr
-        print(most_recent_results.sort_values("fitness", ascending=True))
+        most_recent_results.to_csv(f"results_generation_{i}.csv")
         logging.info(f"Iteration {i} completed")
         logging.info(f"{most_fit} ---> {highest_wr:.4f}")
         logging.info(f"Spread: {highest_wr:.4f} - {average_wr:.4f} = {s:.4f}")

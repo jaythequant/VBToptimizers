@@ -1,4 +1,5 @@
 import pandas as pd
+import gc
 from ._order import simulate_mult_from_order_func
 
 
@@ -21,6 +22,7 @@ def testParams(
             freq=freq,
         )
         fitness_results.append(df)
+        gc.collect()
     
     # Calculate mean results for each param across folds
     cv_results = pd.concat(fitness_results, axis=1) 

@@ -2,3 +2,5 @@ __pycache__
 .env
 *.log
 res.csv
+test.py
+test.ipynb
