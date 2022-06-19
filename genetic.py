@@ -19,7 +19,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-
 if __name__ == "__main__":
 
     logging.info("Initializing genetic cross-validator . . . ")
@@ -44,7 +43,7 @@ if __name__ == "__main__":
             max_workers=4,
             n_splits=5,
             rank_method="rank_space",
-            rank_space_constant=0.667
+            rank_space_constant=0.667,
         )
 
-    print(df)
+    logging.info("Genetic algorithm search completed.")

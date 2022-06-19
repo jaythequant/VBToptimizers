@@ -19,7 +19,7 @@ def geneticCV(
     cross_rate:float=1.00, mutation_rate:float=0.05, handler:str="mutate", n_splits:int=5,
     n_batch_size:int=100, max_workers:int=4, min_trades:int=5, commission:float=0.0008,
     slippage:float=0.0005, cash:int=100_000, order_size:float=0.10, freq:str="m",
-    rank_method="default", rank_space_constant=None, burnin:int=500,
+    rank_method="default", rank_space_constant=None, burnin:int=500, export_results=True,
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -42,8 +42,10 @@ def geneticCV(
         cash : int
         order_size : float
         freq : str
-        squared_probabilities : bool
+        rank_method : str
+        rank_space_constant : float or None
         burnin : int
+        export_results : bool
 
     Returns
     -------
@@ -59,7 +61,7 @@ def geneticCV(
     # Generate initial population
     generation = init_generate_population(params, population=population)
 
-    most_recent_results = None
+    df = None
 
     for i in range(n_iter):
         # Batch the population for parallelization and memory concerns
@@ -90,6 +92,12 @@ def geneticCV(
         # If the parameter combination executed less than `min_trades`, set fitness=0 for that param
         df["fitness"] = np.where(df["trade_count"] < min_trades, 0, df["fitness"])
 
+        logging.info(f"Iteration {i} completed")
+        logging.info(df.sort_values(by="fitness", ascending=False))
+        
+        if export_results:
+            df.to_csv(f"results_generation_{i}.csv")
+
         # Use roulette wheel, random crossover, and mutation to produce next generation
         g = roulette_wheel_selection(
             df, params.keys(),
@@ -102,18 +110,14 @@ def geneticCV(
         generation = _handle_duplication(generation, params, handler=handler)
 
         # Measure and report some statistics
-        most_recent_results = df
-        most_fit = most_recent_results.fitness.idxmax()
-        highest_wr = most_recent_results.fitness.max()
-        average_wr = most_recent_results.fitness.mean()
+        most_fit = df.fitness.idxmax()
+        highest_wr = df.fitness.max()
+        average_wr = df.fitness.mean()
         s = highest_wr - average_wr
-        most_recent_results.to_csv(f"results_generation_{i}.csv")
-        logging.info(f"Iteration {i} completed")
-        logging.info(most_recent_results)
         logging.info(f"{most_fit} ---> {highest_wr:.4f}")
         logging.info(f"Spread: {highest_wr:.4f} - {average_wr:.4f} = {s:.4f}")
 
-    return most_recent_results
+    return df
 
 
 def randomSearch(
