@@ -51,7 +51,8 @@ def generate_offspring(genome_a, genome_b):
 
 
 def roulette_wheel_selection(
-    fitness_results:pd.DataFrame, param_labels:list, population:int=None, squared_prob=False,
+    fitness_results:pd.DataFrame, param_labels:list, population:int=None, rank_method="default",
+    rank_space_constant=None,
 ):
     """Select set of genomes to reproduce using roulette wheel method for selection
 
@@ -67,9 +68,16 @@ def roulette_wheel_selection(
             Returned population of genomes. If `population=None` [default],
             the returned population will be of the same length as the number
             of rows in the `fitness_results` DataFrame.
-        squared_prob : bool, optional
-            If `squared_prob=True` use squared fitness values to calculate 
-            probabilities. Defaults to `False`.
+        rank_method : str, optional
+            Controls the method by which fitness scores are converted to selection probabilities.
+            If `rank_method="default"` or `rank_method=None`, simple probabilities are calculated
+            using
+        rank_space_constant : float, optional
+            Float value representing constant probability of selecting the most fit genome from
+            the fitness results. The max fitness score in the `fitness_results` dataframe will 
+            have a probability `rank_space_constant` to be selected. See `rank_method` docstring
+            for `rank_space` mathematics. If `rank_method != "rank_space"`, this parameter will 
+            be ignored.
 
     Returns
     -------
@@ -85,17 +93,39 @@ def roulette_wheel_selection(
             },
         ]
     """
+    if rank_method == "rank_space" and not rank_space_constant:
+        raise GeneticAlgorithmException("Must specify a rank space constant if using rank space method.")
+    if rank_method == "rank_space" and rank_space_constant >= 1.00:
+        raise GeneticAlgorithmException("Rank space constant must be less than 1.")
+
     # If a population is not specified...
     if not population:
         population = fitness_results.shape[0] # Set length to input row length
 
-    # Convert fitness scores to probabilities
-    # Log the probabilities as a fitness results column labeled "p"
-    fitness_results["p"] = fitness_results["fitness"] / fitness_results["fitness"].sum()
-
-    if squared_prob:
+    # Execute one of many ways to calculate fitness probability weights ... 
+    if rank_method == "default" or rank_method == None:
+        # Calculate probabilities as fitness_i / sum(all fitness scores)
+        fitness_results["p"] = fitness_results["fitness"] / fitness_results["fitness"].sum()
+    if rank_method == "squares":
         # Restate the probabilities with squared fitness results
         fitness_results["p"] = fitness_results["fitness"] ** 2 / (fitness_results["fitness"] ** 2).sum()
+    if rank_method == "rank_space":
+        # Set initial probability column
+        fitness_results["p"] = np.where(
+            fitness_results.fitness == fitness_results.fitness.max(), 
+            rank_space_constant, 
+            1 - rank_space_constant,
+        )
+        # Sort greatest to smallest probabilities
+        fitness_results = fitness_results.sort_values(by="fitness", ascending=False)
+        # Add column representing exponents for rank space equation
+        fitness_results["exp"] = np.arange(0, fitness_results.shape[0])
+        # Calculate rank space probability weights
+        fitness_results["p"] = np.where(
+            fitness_results["exp"] > 0, 
+            fitness_results["p"] ** fitness_results["exp"] * rank_space_constant, 
+            fitness_results["p"]
+        )
 
     new_generation = fitness_results.sample(
         n=population,
