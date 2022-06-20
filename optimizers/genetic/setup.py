@@ -200,7 +200,10 @@ def crossover(parents:list, cross_rate:float=1.00):
     return generation
 
 
-def mutation(generation:list, param_space:dict, mutation_rate:float=0.05):
+def mutation(
+    generation:list, param_space:dict, mutation_rate:float=0.05, style="random", 
+    step_size:float=0.1,
+):
     """Randomly mutate parameters in the generation of genomes passed
     
     Parameters
@@ -243,7 +246,16 @@ def mutation(generation:list, param_space:dict, mutation_rate:float=0.05):
         # If a random value is lower than the mutation probability...
         if np.random.uniform(0, 1) < mutation_rate:
             random_parameter = np.random.choice(list(param_space.keys()))
-            gene = np.random.choice(param_space[random_parameter])
+            # If random then mutation will be any valid option in the search space
+            if style == "random":
+                gene = np.random.choice(param_space[random_parameter])
+            # If step then mutation will add or subtract a pre-defined step from the gene
+            if style == "step":
+                operator = np.random.choice(["plus", "minus"])
+                if operator == "plus":
+                    gene = genome[random_parameter] * (1 + step_size)
+                if operator == "minus":
+                    gene = genome[random_parameter] * (1 - step_size)
             # Update the genome with the mutant gene
             genome[random_parameter] = round(gene, 10)
     # Repeat for all genomes and genes

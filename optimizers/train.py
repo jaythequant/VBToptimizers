@@ -1,5 +1,6 @@
 import logging
 import concurrent.futures
+from matplotlib.pyplot import step
 import numpy as np
 import pandas as pd
 from itertools import repeat
@@ -16,10 +17,11 @@ from .utils.cross_validators import vbt_cv_kfold_constructor
 
 def geneticCV(
     opens:pd.Series, closes:pd.Series, params:dict, n_iter:int=100, population:int=100,
-    cross_rate:float=1.00, mutation_rate:float=0.05, handler:str="mutate", n_splits:int=5,
+    cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
     n_batch_size:int=100, max_workers:int=4, min_trades:int=5, commission:float=0.0008,
-    slippage:float=0.0005, cash:int=100_000, order_size:float=0.10, freq:str="m",
-    rank_method="default", rank_space_constant=None, burnin:int=500, export_results=True,
+    slippage:float=0.0005, cash:int=100_000,  freq:str="m", export_results:bool=True,
+    rank_method="default", rank_space_constant=None, burnin:int=500, mutation_style="random",
+    mutation_steps:float=0.10,
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -53,7 +55,6 @@ def geneticCV(
         DataFrame with multiIndex of parameters and columns showing fitness score and
         supporting statistics for the final generation in the GA process. 
     """
-
     # Use kfold cross-validator to generate `n_split` folds
     close_train_dfs, _ = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
     open_train_dfs, _ = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
@@ -106,8 +107,15 @@ def geneticCV(
             rank_space_constant=rank_space_constant,
         )
         generation = crossover(g, cross_rate=cross_rate)
-        generation = mutation(generation, params, mutation_rate=mutation_rate)
-        generation = _handle_duplication(generation, params, handler=handler)
+        generation = mutation(
+            generation, params,
+            mutation_rate=mutation_rate,
+            style=mutation_style,
+            step_size=mutation_steps,
+        )
+        generation = _handle_duplication(
+            generation, params, handler=mutation_style, step_size=mutation_steps
+        )
 
         # Measure and report some statistics
         most_fit = df.fitness.idxmax()

@@ -16,7 +16,7 @@ def _make_numpy_dictionary(params:dict):
     return output
     
 
-def _handle_duplication(generation:list, param_space:dict, handler:str="mutate"):
+def _handle_duplication(generation:list, param_space:dict, handler:str="random", step_size:float=0.10):
     """Manage the handling of duplicate genomes from generation to generation.
     
     Parameters
@@ -63,15 +63,17 @@ def _handle_duplication(generation:list, param_space:dict, handler:str="mutate")
     while df.duplicated().any():
         iter_count += 1
         if iter_count < 100:
-            if handler == "mutate":
-                # Isolate the duplicates in their own dictionary
-                duplicates = df[df.duplicated()].to_dict("records")
-                # Mutate the dictionaries to be unique values
-                duplicates = pd.DataFrame(
-                    mutation(duplicates, param_space, mutation_rate=1.00)
+            # Isolate the duplicates in their own dictionary
+            duplicates = df[df.duplicated()].to_dict("records")
+            # Mutate the dictionaries to be unique values
+            duplicates = pd.DataFrame(
+                mutation(
+                    duplicates, param_space, mutation_rate=1.00, 
+                    style=handler, step_size=step_size,
                 )
-                df = df.drop_duplicates(keep="first")
-                df = pd.concat([df, duplicates]).reset_index(drop=True)
+            )
+            df = df.drop_duplicates(keep="first")
+            df = pd.concat([df, duplicates]).reset_index(drop=True)
         elif iter_count > 100:
             warnings.warn("Returned dataframe contains duplicates")
             break

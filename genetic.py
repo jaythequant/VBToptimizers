@@ -24,26 +24,30 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(5_000, 7_000, 100, dtype=int),
-        "upper": np.arange(2.0, 5.2, 0.3, dtype=float),
-        "lower": np.arange(2.0, 5.2, 0.3, dtype=float) * -1.0,
-        "exit": np.arange(0.5, 2.0, 0.2, dtype=float),
-        "delta": 0.1 ** np.arange(5, 10, 1, dtype=float),
-        "vt": np.arange(0.5, 1.1, 0.1, dtype=float),
+        "period": np.arange(100, 800, 50, dtype=int),
+        "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
+        "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
+        "exit": np.arange(0.5, 2.0, 0.1, dtype=float),
+        "delta": 0.1 ** np.arange(1, 10, 1, dtype=float),
+        "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
 
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[:100_000]
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[:100_000]
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[1_150_000:]
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[1_150_000:]
 
     df = geneticCV(
             opens, closes, params,
             n_iter=100,
-            n_batch_size=13,
+            n_batch_size=25,
             population=100,
             max_workers=4,
             n_splits=5,
             rank_method="rank_space",
-            rank_space_constant=0.667,
+            rank_space_constant=0.333,
+            export_results=False,
+            mutation_style="step",
+            mutation_rate=0.25,
         )
 
     logging.info("Genetic algorithm search completed.")
+    df.to_csv("final_set.csv")
