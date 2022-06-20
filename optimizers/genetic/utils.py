@@ -1,6 +1,8 @@
 import pandas as pd
+import numpy as np
 import warnings
-from .setup import mutation
+from .operators import mutation
+from ._exceptions import GeneticAlgorithmException
 
 
 def _make_numpy_dictionary(params:dict):
@@ -86,13 +88,28 @@ def _chunks(lst, n):
         yield lst[i:i + n]
 
 
-def _batch_populations(population:list, n_batch_size:int=100):
+def _batch_populations(population:list, n_batch_size:int=None, n_batches:int=None):
     """Split population into managable batches"""
     batches = []
 
-    chunk_gen = _chunks(population, n_batch_size)
-    for chunk in chunk_gen:
-        batch = _make_numpy_dictionary(chunk)
-        batches.append(batch)
-    
+    if n_batches and n_batch_size:
+        raise GeneticAlgorithmException("Cannot specify both n_batch_size and n_batches")
+
+    # Do not batch
+    if not n_batch_size and not n_batches:
+        return population
+
+    # Split into unspecified batches of size n
+    if n_batch_size and not n_batches:
+        chunk_gen = _chunks(population, n_batch_size)
+        for chunk in chunk_gen:
+            batch = _make_numpy_dictionary(chunk)
+            batches.append(batch)
+
+    # Split into n batches with unspecified size
+    if n_batches and not n_batch_size:
+        np_batches = np.array_split(population, n_batches)
+        for b in np_batches:
+            batches.append(list(b)) # Convert np.array to list
+
     return batches

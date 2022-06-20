@@ -52,7 +52,7 @@ def generate_offspring(genome_a, genome_b):
 
 def roulette_wheel_selection(
     fitness_results:pd.DataFrame, param_labels:list, population:int=None, rank_method="default",
-    rank_space_constant=None,
+    rank_space_constant=0.333, diversity_constant:float=0, diversify=False,
 ):
     """Select set of genomes to reproduce using roulette wheel method for selection
 
@@ -97,6 +97,8 @@ def roulette_wheel_selection(
         raise GeneticAlgorithmException("Must specify a rank space constant if using rank space method.")
     if rank_method == "rank_space" and rank_space_constant >= 1.00:
         raise GeneticAlgorithmException("Rank space constant must be less than 1.")
+    if rank_method != "rank_space" and diversify == True:
+        raise GeneticAlgorithmException("Cannot use diversify operator outside of rank space currently")
 
     # If a population is not specified...
     if not population:
@@ -127,16 +129,43 @@ def roulette_wheel_selection(
             fitness_results["p"]
         )
 
-    new_generation = fitness_results.sample(
-        n=population,
-        weights=fitness_results["p"],
-        replace=True,
-    )
+    if not diversify:
+        next_generation = fitness_results.sample(
+            n=population,
+            weights=fitness_results["p"],
+            replace=True,
+        )
+    if diversify:
+        next_generation = pd.DataFrame()
+
+        for _ in range(population):
+            fitness_results["i"] = fitness_results.index
+            fitness_results["d"] = fitness_results.i.apply(lambda x: _hamming_distance(x, next_generation))
+            fitness_results["adj_fitness"] = fitness_results.fitness + diversity_constant * fitness_results.d
+
+            fitness_results["p"] = np.where(
+                fitness_results.adj_fitness == fitness_results.adj_fitness.max(), 
+                rank_space_constant, 
+                1 - rank_space_constant,
+            )
+            # Sort greatest to smallest probabilities
+            fitness_results = fitness_results.sort_values(by="adj_fitness", ascending=False)
+            # Add column representing exponents for rank space equation
+            fitness_results["exp"] = np.arange(0, fitness_results.shape[0])
+            # Calculate rank space probability weights
+            fitness_results["p"] = np.where(
+                fitness_results["exp"] > 0, 
+                fitness_results["p"] ** fitness_results["exp"] * rank_space_constant, 
+                fitness_results["p"]
+            )
+
+            x = fitness_results.sample(n=1, weights=fitness_results.p)
+            next_generation = pd.concat([next_generation, x])
 
     # Label parameter tupes with param names and wrap in dictionary
     # Append dictionary genomes to a list of all genomes in population
     genomes = []
-    for gen in list(new_generation.index):
+    for gen in list(next_generation.index):
         g = dict(zip(param_labels, gen))
         genomes.append(g)
 
@@ -260,3 +289,20 @@ def mutation(
             genome[random_parameter] = round(gene, 10)
     # Repeat for all genomes and genes
     return generation
+
+
+def _hamming_distance(gx:tuple, next_generation:pd.DataFrame) -> float:
+    """Calculate average hamming distance for specific genome relative to set of genomes"""
+    if next_generation.empty:
+        return 0
+
+    genomes = list(next_generation.index)
+
+    distances = []
+
+    for gi in genomes:
+        # Compare each item in zipped dictionary of items 
+        d = sum(xi != yi for xi, yi in zip(gx, gi))
+        distances.append(d)
+    
+    return np.mean(distances)

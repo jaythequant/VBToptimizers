@@ -2,6 +2,7 @@ import logging
 import pandas as pd
 import numpy as np
 from optimizers.train import geneticCV
+from optimizers.noncurr import geneticCVtest
 
 # Logging config
 stream_handler = logging.StreamHandler()
@@ -24,29 +25,31 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(100, 800, 50, dtype=int),
+        "period": np.arange(10_000, 15_000, 500, dtype=int),
         "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
         "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.5, 2.0, 0.1, dtype=float),
+        "exit": np.arange(0.5, 2.1, 0.1, dtype=float),
         "delta": 0.1 ** np.arange(1, 10, 1, dtype=float),
         "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
 
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[1_150_000:]
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[1_150_000:]
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[-400_000:]
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[-400_000:]
 
     df = geneticCV(
             opens, closes, params,
-            n_iter=100,
-            n_batch_size=25,
+            n_iter=50,
+            n_batch_size=10,
             population=100,
-            max_workers=4,
+            max_workers=None,
             n_splits=5,
             rank_method="rank_space",
             rank_space_constant=0.333,
             export_results=False,
             mutation_style="step",
             mutation_rate=0.25,
+            diversify=True,
+            diversity_constant=0.333,
         )
 
     logging.info("Genetic algorithm search completed.")

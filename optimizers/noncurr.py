@@ -1,5 +1,6 @@
 import logging
 import concurrent.futures
+from matplotlib.pyplot import step
 import numpy as np
 import pandas as pd
 from itertools import repeat
@@ -14,14 +15,13 @@ from .genetic.utils import _batch_populations
 from .utils.cross_validators import vbt_cv_kfold_constructor
 
 
-def geneticCV(
+def geneticCVtest(
     opens:pd.Series, closes:pd.Series, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
-    n_batch_size:int or None=None, max_workers:int=4, min_trades:int=10, 
+    n_batch_size:int=100, max_workers:int=4, min_trades:int=10, commission:float=0.0008,
     slippage:float=0.0005, cash:int=100_000,  freq:str="m", export_results:bool=True,
     rank_method="default", rank_space_constant=None, burnin:int=500, mutation_style="random",
-    mutation_steps:float=0.10, diversify:bool=False, diversity_constant:float=0, 
-    n_batches:int or None=None, commission:float=0.0008,
+    mutation_steps:float=0.10, diversify:bool=False, diversity_constant:float=0,
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -48,11 +48,6 @@ def geneticCV(
         rank_space_constant : float or None
         burnin : int
         export_results : bool
-        n_batches : int or None
-        diversity_constance : float
-        diversify : bool
-        mutation_steps : float
-        mutation_style : str
 
     Returns
     -------
@@ -67,32 +62,34 @@ def geneticCV(
     # Generate initial population
     generation = init_generate_population(params, population=population)
 
-    # Noted this out as I dont know what its supposed to do?
-    # df = None 
+    df = None
 
     for i in range(n_iter):
         # Batch the population for parallelization and memory concerns
-        batches = _batch_populations(
-            generation, n_batch_size=n_batch_size, n_batches=n_batches
-        )
+        batches = _batch_populations(generation, n_batch_size=n_batch_size)
 
         results = []
 
         # Execute our cross validation function concurrently on `max_worker` processors
-        with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
-            for result in executor.map(
-                testParamsgenetic, 
-                repeat(close_train_dfs), 
-                repeat(open_train_dfs), 
-                batches,
-                repeat(commission),
-                repeat(slippage),
-                repeat(burnin),
-                repeat(cash),
-                repeat(order_size),
-                repeat(freq),
-            ):
-                results.append(result)
+        # with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # for result in executor.map(
+            #     testParamsgenetic, 
+            #     repeat(close_train_dfs), 
+            #     repeat(open_train_dfs), 
+            #     batches,
+            #     repeat(commission),
+            #     repeat(slippage),
+            #     repeat(burnin),
+            #     repeat(cash),
+            #     repeat(order_size),
+            #     repeat(freq),
+            # ):
+            #     results.append(result)
+        
+        for batch in batches:
+            result = testParamsgenetic(
+                close_train_dfs, open_train_dfs, batch
+            )
 
         df = pd.concat(results)
         df.rename(columns={"Win Rate": "fitness"}, inplace=True)
