@@ -10,18 +10,20 @@ from .setup.lqe_setup import *
 from .setup._cv_orders import testParamsgenetic, testParamsrandom
 from .setup.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
-from .genetic.utils import _batch_populations
+from .genetic.utils import _batch_populations, _restate_constants
 from .utils.cross_validators import vbt_cv_kfold_constructor
+from .genetic._exceptions import GeneticAlgorithmException
 
 
 def geneticCV(
-    opens:pd.Series, closes:pd.Series, params:dict, n_iter:int=100, population:int=100,
+    opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
-    n_batch_size:int or None=None, max_workers:int=4, min_trades:int=10, 
+    n_batch_size:int or None=None, max_workers:int or None=None, min_trades:int=10,
     slippage:float=0.0005, cash:int=100_000,  freq:str="m", export_results:bool=True,
-    rank_method="default", rank_space_constant=None, burnin:int=500, mutation_style="random",
-    mutation_steps:float=0.10, diversify:bool=False, diversity_constant:float=0, 
-    n_batches:int or None=None, commission:float=0.0008,
+    rank_method="default", rank_space_constant:float or None=None, mutation_style="random",
+    mutation_steps:float or dict=0.10, diversify:bool=False, commission:float=0.0008, 
+    n_batches:int or None=None, burnin:int=500, diversity_constant:float or dict=0.00,
+    pickle_results:bool=False, 
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -60,6 +62,13 @@ def geneticCV(
         DataFrame with multiIndex of parameters and columns showing fitness score and
         supporting statistics for the final generation in the GA process. 
     """
+    if isinstance(rank_space_constant, dict):
+        rank_stages = _restate_constants(rank_space_constant)
+        rank_space_constant = rank_stages[0][1]
+    if isinstance(mutation_steps, dict):
+        mutation_stages = _restate_constants(mutation_steps)
+        mutation_steps = mutation_stages[0][1]
+
     # Use kfold cross-validator to generate `n_split` folds
     close_train_dfs, _ = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
     open_train_dfs, _ = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
@@ -71,6 +80,18 @@ def geneticCV(
     # df = None 
 
     for i in range(n_iter):
+        # try:
+        #     # Check if the mutation or rank space const needs updated
+        #     for idx, c in mutation_stages:
+        #         if i + 1 == idx:
+        #             mutation_steps = c
+        #     for idx, c in rank_stages:
+        #         if i + 1 == idx:
+        #             rank_space_constant = c
+        # except:
+        #     # If not applicable pass
+        #     pass
+
         # Batch the population for parallelization and memory concerns
         batches = _batch_populations(
             generation, n_batch_size=n_batch_size, n_batches=n_batches

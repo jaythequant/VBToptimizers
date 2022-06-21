@@ -16,7 +16,18 @@ def _make_numpy_dictionary(params:dict):
         output[key] = values # Convert lists in df_list to np.array
 
     return output
-    
+
+
+def _restate_constants(const_dict:dict, iterations) -> list:
+    """Convert constants dictionary to tuples"""
+    lst = []
+
+    for k, v in const_dict.items():
+        s = iterations * k
+        lst.append((s,v))
+
+    return lst
+
 
 def _handle_duplication(generation:list, param_space:dict, handler:str="random", step_size:float=0.10):
     """Manage the handling of duplicate genomes from generation to generation.

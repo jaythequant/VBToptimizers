@@ -25,7 +25,7 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(10_000, 15_000, 500, dtype=int),
+        "period": np.arange(100, 200, 10, dtype=int),
         "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
         "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.5, 2.1, 0.1, dtype=float),
@@ -33,8 +33,8 @@ if __name__ == "__main__":
         "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
 
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[-400_000:]
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[-400_000:]
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[:10_000]
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[:10_000]
 
     df = geneticCV(
             opens, closes, params,
