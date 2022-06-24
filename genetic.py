@@ -2,7 +2,6 @@ import logging
 import pandas as pd
 import numpy as np
 from optimizers.train import geneticCV
-from optimizers.noncurr import geneticCVtest
 
 # Logging config
 stream_handler = logging.StreamHandler()
@@ -33,8 +32,8 @@ if __name__ == "__main__":
         "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
 
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[:10_000]
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[:10_000]
+    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[-150_000:]
+    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[-150_000:]
 
     df = geneticCV(
             opens, closes, params,
@@ -47,9 +46,9 @@ if __name__ == "__main__":
             rank_space_constant=0.333,
             export_results=False,
             mutation_style="step",
-            mutation_rate=0.25,
             diversify=True,
             diversity_constant=0.333,
+            hedge="beta",
         )
 
     logging.info("Genetic algorithm search completed.")

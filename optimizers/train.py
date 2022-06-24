@@ -23,7 +23,7 @@ def geneticCV(
     rank_method="default", rank_space_constant:float or None=None, mutation_style="random",
     mutation_steps:float or dict=0.10, diversify:bool=False, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity_constant:float or dict=0.00,
-    pickle_results:bool=False, 
+    pickle_results:bool=False, hedge="dollar",
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -112,6 +112,7 @@ def geneticCV(
                 repeat(cash),
                 repeat(order_size),
                 repeat(freq),
+                repeat(hedge),
             ):
                 results.append(result)
 

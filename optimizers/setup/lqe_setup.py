@@ -71,7 +71,7 @@ def pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_siz
     
 
 @njit
-def pre_segment_func_nb(c, memory, params, size, mode):
+def pre_segment_func_nb(c, memory, params, size, mode, hedge):
     """Prepare the current segment (= row within group)."""
     
     # In state space implentation a burn-in period is needed
@@ -120,20 +120,26 @@ def pre_segment_func_nb(c, memory, params, size, mode):
             # (a) Purchases a dynamic number of shares based on percent of portfolio value
             # (b) Uses dynamic hedge ratio to purchase approx. $$ equivilent number independent asset
             # REQUIRES FURTHER REVIEW TO ENSURE BEHAVIOR IS APPROPRIATE
-            size[0] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
-            size[1] = (outlay / c.close[c.i - 1, c.from_col + 1])[0]
-            # The size notes below are the old simpler way implement order sizing.... 
-            # size[0] = -params.order_size
-            # size[1] = params.order_size
+            if hedge == "dollar":
+                size[0] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
+                size[1] = (outlay / c.close[c.i - 1, c.from_col + 1])[0]
+            if hedge == "beta":
+                size[0] = -((outlay * theta[0]) / c.close[c.i - 1, c.from_col])[0]
+                size[1] = (outlay / c.close[c.i - 1, c.from_col + 1])[0]
             c.call_seq_now[0] = 0
             c.call_seq_now[1] = 1
             memory.status[0] = 1
             
+            # Note that x_t = c.close[c.i - 1, c.from_col]
+            # and y_t = c.close[c.i - 1, c.from_col + 1]
+
         elif memory.zscore[c.i - 1] < params.lower and memory.status[0] != 2:
-            size[0] = (outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
-            size[1] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0]
-            # size[0] = params.order_size
-            # size[1] = -params.order_size
+            if hedge == "dollar":
+                size[0] = (outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
+                size[1] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0]
+            if hedge == "beta":
+                size[0] = ((outlay * theta[0]) / c.close[c.i - 1, c.from_col])[0]
+                size[1] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0]
             c.call_seq_now[0] = 1  # execute the second order first to release funds early
             c.call_seq_now[1] = 0
             memory.status[0] = 2

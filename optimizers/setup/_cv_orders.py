@@ -7,7 +7,7 @@ from .statistics import score_results, return_results
 
 def testParamsgenetic(
     close_test_sets, open_test_sets, params, commission=0.0008, slippage=0.0010, 
-    burnin=5000, cash=100_000, order_size=0.10, freq="m",
+    burnin=5000, cash=100_000, order_size=0.10, freq="m", hedge="dollar",
 ) -> pd.Series:
 
     fitness_results = []
@@ -22,6 +22,7 @@ def testParamsgenetic(
             slippage=slippage, 
             order_size=order_size,
             freq=freq,
+            hedge=hedge,
         )
         fitness_results.append(df)
         gc.collect()
@@ -35,7 +36,7 @@ def testParamsgenetic(
 
 def testParamsrandom(
     close_test_sets, open_test_sets, params, commission=0.0008, slippage=0.0010, 
-    burnin=5000, cash=100_000, order_size=0.10, freq="m",
+    burnin=5000, cash=100_000, order_size=0.10, freq="m", hedge="dollar",
 ):
 
     test_res = []
@@ -56,6 +57,7 @@ def testParamsrandom(
             slippage=slippage, 
             order_size=order_size,
             freq=freq,
+            hedge=hedge,
         )
 
         test_res.append(pf)
