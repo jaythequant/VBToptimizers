@@ -24,7 +24,7 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(100, 200, 10, dtype=int),
+        "period": np.arange(500, 5000, 100, dtype=int),
         "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
         "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.5, 2.1, 0.1, dtype=float),
@@ -45,9 +45,8 @@ if __name__ == "__main__":
             rank_method="rank_space",
             rank_space_constant=0.333,
             export_results=False,
-            mutation_style="step",
             diversify=True,
-            diversity_constant=0.333,
+            diversity_constant=0.667,
             hedge="beta",
         )
 

@@ -23,7 +23,7 @@ def geneticCV(
     rank_method="default", rank_space_constant:float or None=None, mutation_style="random",
     mutation_steps:float or dict=0.10, diversify:bool=False, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity_constant:float or dict=0.00,
-    pickle_results:bool=False, hedge="dollar",
+    pickle_results:bool=False, hedge="dollar", trade_const=2,
 ) -> pd.DataFrame:
     """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
 
@@ -117,16 +117,12 @@ def geneticCV(
                 results.append(result)
 
         df = pd.concat(results)
-        df.rename(columns={"Win Rate": "fitness"}, inplace=True)
 
-        # TEMPORARY MAY CHANGE LATER #
-        # If the parameter combination executed less than `min_trades`, set fitness=0 for that param
-        df["fitness"] = np.where(df["trade_count"] < min_trades, 0, df["fitness"])
-        zeroes = df[df["fitness"] == 0].shape[0]
+        adjustor = (1 - (1 / df["trade_count"])) ** trade_const
+        df["fitness"] = df["Win Rate"] * adjustor
         
         logging.info(f"Iteration {i} completed")
         logging.info('\n\t'+ df.sort_values("fitness", ascending=False).head(10).to_string().replace('\n', '\n\t'))
-        logging.info(f"Number of zero'd out rows: {zeroes}")
         
         if export_results:
             df.to_csv(f"results_generation_{i}.csv")
