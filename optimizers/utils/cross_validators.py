@@ -1,4 +1,5 @@
 from sklearn.model_selection import KFold
+from sklearn.model_selection import TimeSeriesSplit
 
 
 def vbt_cv_scikit_constructor(df, cv):
@@ -140,3 +141,30 @@ def vbt_cv_sliding_constructor(df, n_splits, set_lens=(), min_len=1):
         test_folds.append(df)
 
     return train_folds, validate_folds, test_folds
+
+
+def vbt_cv_timeseries_constructor(df, n_splits=5, gap=0, max_train_size=None, test_size=None):
+    """Utilize SKLearn's `TimeSeriesSplit` with Vectorbt `split` method to construct train/test folds"""
+    tscv = TimeSeriesSplit(
+        n_splits=n_splits, 
+        gap=gap, 
+        max_train_size=max_train_size, 
+        test_size=test_size
+    )
+
+    train_folds = []
+    test_folds = []
+
+    (train_df, train_idx), (test_df, test_idx) = df.vbt.split(tscv)
+
+    for i in train_df.columns.levels[0]:
+        df = train_df.loc[:, i].dropna()
+        df.index = train_idx[i]
+        train_folds.append(df)
+
+    for i in test_df.columns.levels[0]:
+        df = test_df.loc[:, i].dropna()
+        df.index = test_idx[i]
+        test_folds.append(df)
+
+    return train_folds, test_folds

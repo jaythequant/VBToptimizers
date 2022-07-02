@@ -10,49 +10,74 @@ from .setup.lqe_setup import *
 from .setup._cv_orders import testParamsgenetic, testParamsrandom
 from .setup.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
-from .genetic.utils import _batch_populations, _restate_constants
+from .genetic.utils import _batch_populations
 from .utils.cross_validators import vbt_cv_kfold_constructor
-from .genetic._exceptions import GeneticAlgorithmException
+from .utils.cross_validators import vbt_cv_timeseries_constructor
 
 
 def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
-    n_batch_size:int or None=None, max_workers:int or None=None, min_trades:int=10,
-    slippage:float=0.0005, cash:int=100_000,  freq:str="m", export_results:bool=True,
-    rank_method="default", rank_space_constant:float or None=None, mutation_style="random",
-    mutation_steps:float or dict=0.10, diversify:bool=False, commission:float=0.0008, 
-    n_batches:int or None=None, burnin:int=500, diversity_constant:float or dict=0.00,
-    pickle_results:bool=False, hedge="dollar", trade_const=2,
+    n_batch_size:int or None=None, max_workers:int or None=None,
+    slippage:float=0.0005, cash:int=100_000, freq:str="m",
+    rank_method="default", elitism:float or dict=None, mutation_style="random",
+    mutation_steps:float or dict=0.10, commission:float=0.0008, 
+    n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
+    pickle_results:bool=False, hedge="dollar", trade_const=2, cv="timeseries",
 ) -> pd.DataFrame:
-    """Execute genetic algorithm `n_iter` times on data set or until convergence fitnesses
+    """Optimize pairs trading strategy via genetic algorithm
 
     Parameters
     ----------
-        opens : pd.Series
-        closes : pd.Series
+        opens : pd.DataFrame
+            Dataset of open prices per bar for asset pair. Pandas dataframe should
+            be indexed to datetime. Be aware that results may be inaccurate if
+            index is missing bars, if `freq` parameter is specified differently
+            than datatime index frequency, or if datatime index frequency is 
+            in consistent.
+        closes : pd.DataFrame
+            Dataset of close prices per bar for asset pair. This dataframe should
+            be specified with an identical index to the opens dataframe. If it is 
+            not there will be consistent test results.
         params : dict
-        n_iter : int
-        population : int
-        cross_rate : float
-        mutation_rate : float
-        handler : str
-        n_splits : int
-        n_batch_size : int
-        max_workers : int
+        n_iter : int, optional
+            Maximum number of iterations to run genetic algorithm for optimization.
+        population : int, optional
+            Fixed population size per iteration of genetic algorithm. E.g., if
+            `population=100`, then 100 parameter combinations will be run per 
+            generation for `n_iter` generations or until convergence. 
+            Default = 100
+        cross_rate : float, optional
+            Percentage rate at which each genome will be allowed to produce an 
+            offspring with another genome in the population. Default = 1.00
+        mutation_rate : float, optional
+            Percentage change that a genome will be "mutated". Mutation refers to 
+            a randomly selected gene (parameter) within the genome (set of parameters)
+            being replaced by a randomly selected *different* gene.
+        n_splits : int, optional
+            Number of splits to use for cross-validation training. Default = 5. 
+            To avoid using cross-validation set `cv=None`.
+        n_batch_size : int, optional
+        max_workers : int, optional
         min_trades : int
         commission : float
         slippage : float
         cash : int
         order_size : float
-        freq : str
+        freq : str, optional
+            Frequency at which open and close data appears.
         rank_method : str
-        rank_space_constant : float or None
         burnin : int
+            Burnin period before which no rolling statistics are included. 
+            Burnin periods are extremely important for the LQE process, but are
+            highly subjective to the data used. Please review the following link
+            for further information on finding an appropriate burnin period:
         export_results : bool
-        n_batches : int or None
-        diversity_constance : float
-        diversify : bool
+        n_batches : int or None, optional
+            Rather than specifying batch size, we can specify batch count using this
+            parameter. See also `n_batch_size` for specifying batch size. Note that
+            if `n_batches` and `n_batch_size` as None (defaults), the data will not
+            be batches and may overwhelm your machines memory.
         mutation_steps : float
         mutation_style : str
 
@@ -62,35 +87,31 @@ def geneticCV(
         DataFrame with multiIndex of parameters and columns showing fitness score and
         supporting statistics for the final generation in the GA process. 
     """
-    if isinstance(rank_space_constant, dict):
-        rank_stages = _restate_constants(rank_space_constant)
-        rank_space_constant = rank_stages[0][1]
-    if isinstance(mutation_steps, dict):
-        mutation_stages = _restate_constants(mutation_steps)
-        mutation_steps = mutation_stages[0][1]
-
-    # Use kfold cross-validator to generate `n_split` folds
-    close_train_dfs, _ = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
-    open_train_dfs, _ = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
+    if cv == "kfold":
+        close_train_dfs, _ = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
+        open_train_dfs, _ = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
+    if cv == "timeseries":
+        close_train_dfs, _ = vbt_cv_timeseries_constructor(closes, n_splits=n_splits)
+        open_train_dfs, _ = vbt_cv_timeseries_constructor(opens, n_splits=n_splits)
     
     # Generate initial population
     generation = init_generate_population(params, population=population)
 
-    # Noted this out as I dont know what its supposed to do?
-    # df = None 
-
     for i in range(n_iter):
-        # try:
-        #     # Check if the mutation or rank space const needs updated
-        #     for idx, c in mutation_stages:
-        #         if i + 1 == idx:
-        #             mutation_steps = c
-        #     for idx, c in rank_stages:
-        #         if i + 1 == idx:
-        #             rank_space_constant = c
-        # except:
-        #     # If not applicable pass
-        #     pass
+
+        if isinstance(diversity, dict):
+            for stage, const in diversity.items():
+                if i == stage:
+                    diversity_const = const
+        else:
+            diversity_const = diversity
+        
+        if isinstance(elitism, dict):
+            for stage, const in elitism.items():
+                if i == stage:
+                    elitism_const = const
+        else:
+            elitism_const = elitism
 
         # Batch the population for parallelization and memory concerns
         batches = _batch_populations(
@@ -119,22 +140,18 @@ def geneticCV(
         df = pd.concat(results)
 
         adjustor = (1 - (1 / df["trade_count"])) ** trade_const
-        df["fitness"] = df["Win Rate"] * adjustor
+        df["fitness"] = df["Weighted Average"] * adjustor
         
         logging.info(f"Iteration {i} completed")
         logging.info('\n\t'+ df.sort_values("fitness", ascending=False).head(10).to_string().replace('\n', '\n\t'))
-        
-        if export_results:
-            df.to_csv(f"results_generation_{i}.csv")
 
         # Use roulette wheel, random crossover, and mutation to produce next generation
         g = roulette_wheel_selection(
             df, params.keys(),
             population=population,
             rank_method=rank_method,
-            rank_space_constant=rank_space_constant,
-            diversify=diversify,
-            diversity_constant=diversity_constant,
+            rank_space_constant=elitism_const,
+            diversity_constant=diversity_const,
         )
         generation = crossover(g, cross_rate=cross_rate)
         generation = mutation(

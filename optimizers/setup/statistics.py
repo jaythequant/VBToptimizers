@@ -3,7 +3,7 @@ import timedelta as td
 import numpy as np
 
 
-def extract_wr(pf) -> float:
+def extract_wr(pf) -> pd.Series:
     """
     Extracts win rate from vbt portfolio object as % of net long-short trade
 
@@ -131,3 +131,20 @@ def number_of_trades(pf) -> pd.Series:
     trades_ser = pd.Series(num_trades.values(), index=num_trades.keys(), name="trade_count")
 
     return trades_ser
+
+
+def weighted_average(df:pd.DataFrame) -> pd.Series:
+    """Calculate the weighted-average win rate across folds"""
+    g = df.groupby(by=df.columns, axis=1)       # Group by column
+    trades = g.get_group("trade_count")         # Extract trade_count
+    wr = g.get_group("Win Rate")                # Extract win rate
+    group_len = trades.shape[1]                 # Grab the group lengths
+    wr.columns = list(range(0, group_len))      # Rename to unique values
+    trades.columns = list(range(0, group_len))    
+    weighted = (trades * wr).sum(axis=1)        # Sum weighted win rate
+    total_trades = trades.sum(axis=1)           # Sum total weights
+    weighted_results = pd.Series(
+        weighted / total_trades, 
+        name="Weighted Average",
+    )
+    return weighted_results

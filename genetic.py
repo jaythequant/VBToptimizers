@@ -24,7 +24,7 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(500, 5000, 100, dtype=int),
+        "period": np.arange(50, 1000, 10, dtype=int),
         "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
         "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.5, 2.1, 0.1, dtype=float),
@@ -32,22 +32,20 @@ if __name__ == "__main__":
         "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
 
-    opens = pd.read_csv("optimizers/data/crypto_open_data.csv", index_col="time")[-150_000:]
-    closes = pd.read_csv("optimizers/data/crypto_close_data.csv", index_col="time")[-150_000:]
+    opens = pd.read_csv("optimizers/data/hourly_open_data.csv", index_col="time")
+    closes = pd.read_csv("optimizers/data/hourly_close_data.csv", index_col="time")
 
     df = geneticCV(
             opens, closes, params,
-            n_iter=50,
-            n_batch_size=10,
+            n_iter=60,
+            n_batch_size=13,
             population=100,
-            max_workers=None,
-            n_splits=5,
             rank_method="rank_space",
-            rank_space_constant=0.333,
-            export_results=False,
-            diversify=True,
-            diversity_constant=0.667,
-            hedge="beta",
+            elitism=0.333,
+            diversity=0.667,
+            trade_const=2.5,
+            cv="timeseries",
+            burnin=100,
         )
 
     logging.info("Genetic algorithm search completed.")

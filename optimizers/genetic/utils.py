@@ -108,7 +108,7 @@ def _batch_populations(population:list, n_batch_size:int=None, n_batches:int=Non
 
     # Do not batch
     if not n_batch_size and not n_batches:
-        return population
+        return _make_numpy_dictionary(population)
 
     # Split into unspecified batches of size n
     if n_batch_size and not n_batches:
@@ -121,6 +121,7 @@ def _batch_populations(population:list, n_batch_size:int=None, n_batches:int=Non
     if n_batches and not n_batch_size:
         np_batches = np.array_split(population, n_batches)
         for b in np_batches:
-            batches.append(list(b)) # Convert np.array to list
+            batch = _make_numpy_dictionary(list(b))
+            batches.append(batch) # Convert np.array to list
 
     return batches

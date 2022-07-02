@@ -52,7 +52,7 @@ def generate_offspring(genome_a, genome_b):
 
 def roulette_wheel_selection(
     fitness_results:pd.DataFrame, param_labels:list, population:int=None, rank_method="default",
-    rank_space_constant=0.333, diversity_constant:float=0, diversify=False,
+    rank_space_constant=0.333, diversity_constant:float=0,
 ):
     """Select set of genomes to reproduce using roulette wheel method for selection
 
@@ -63,7 +63,7 @@ def roulette_wheel_selection(
             statisticals desired with multiIndex of parameters. The fitness
             score must have the column name "fitness". 
         param_labels : list
-            List of parameter labels add as key to parameter values.
+            List of parameter labels to add as key to parameter values.
         population : int or None, optional
             Returned population of genomes. If `population=None` [default],
             the returned population will be of the same length as the number
@@ -97,8 +97,6 @@ def roulette_wheel_selection(
         raise GeneticAlgorithmException("Must specify a rank space constant if using rank space method.")
     if rank_method == "rank_space" and rank_space_constant >= 1.00:
         raise GeneticAlgorithmException("Rank space constant must be less than 1.")
-    if rank_method != "rank_space" and diversify == True:
-        raise GeneticAlgorithmException("Cannot use diversify operator outside of rank space currently")
 
     # If a population is not specified...
     if not population:
@@ -108,9 +106,7 @@ def roulette_wheel_selection(
     if rank_method == "default" or rank_method == None:
         # Calculate probabilities as fitness_i / sum(all fitness scores)
         fitness_results["p"] = fitness_results["fitness"] / fitness_results["fitness"].sum()
-    if rank_method == "squares":
-        # Restate the probabilities with squared fitness results
-        fitness_results["p"] = fitness_results["fitness"] ** 2 / (fitness_results["fitness"] ** 2).sum()
+
     if rank_method == "rank_space":
         # Set initial probability column
         fitness_results["p"] = np.where(
@@ -129,13 +125,16 @@ def roulette_wheel_selection(
             fitness_results["p"]
         )
 
-    if not diversify:
+    # If we do not want to use diversity as a weight we can do this faster sampling method
+    if diversity_constant == 0.0:
         next_generation = fitness_results.sample(
             n=population,
             weights=fitness_results["p"],
             replace=True,
         )
-    if diversify:
+    
+    # If we do want to weight by diversity we will use a hamming distance calculation
+    if diversity_constant > 0.0:
         next_generation = pd.DataFrame()
 
         for _ in range(population):
