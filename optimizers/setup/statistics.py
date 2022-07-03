@@ -133,7 +133,7 @@ def number_of_trades(pf) -> pd.Series:
     return trades_ser
 
 
-def weighted_average(df:pd.DataFrame) -> pd.Series:
+def _weighted_average(df:pd.DataFrame) -> pd.Series:
     """Calculate the weighted-average win rate across folds"""
     g = df.groupby(by=df.columns, axis=1)       # Group by column
     trades = g.get_group("trade_count")         # Extract trade_count
@@ -148,3 +148,17 @@ def weighted_average(df:pd.DataFrame) -> pd.Series:
         name="Weighted Average",
     )
     return weighted_results
+
+
+def _calculate_mse(train_df, validate_df):
+    """Return MSE and STD of errors in training versus validation win rates"""
+    train_groups = train_df.groupby(by=train_df.columns, axis=1)
+    validate_groups = validate_df.groupby(by=validate_df.columns, axis=1)
+    train_wr = train_groups.get_group("Win Rate")
+    validate_wr = validate_groups.get_group("Win Rate")
+    train_wr.columns = list(range(0, train_wr.shape[1]))
+    validate_wr.columns = list(range(0, validate_wr.shape[1]))
+    sq_error = (validate_wr - train_wr) ** 2
+    mse = pd.Series(sq_error.mean(axis=1), name="MSE")
+    std = pd.Series(sq_error.T.describe().T["std"], name="STD")
+    return mse, std

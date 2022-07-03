@@ -7,7 +7,7 @@ from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
 from .setup.lqe_setup import *
-from .setup._cv_orders import testParamsgenetic, testParamsrandom
+from .setup._cv_orders import validateParamsgenetic, testParamsrandom
 from .setup.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
@@ -88,11 +88,11 @@ def geneticCV(
         supporting statistics for the final generation in the GA process. 
     """
     if cv == "kfold":
-        close_train_dfs, _ = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
-        open_train_dfs, _ = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
+        close_train_dfs, close_validate_dfs = vbt_cv_kfold_constructor(closes, n_splits=n_splits)
+        open_train_dfs, open_validate_dfs = vbt_cv_kfold_constructor(opens, n_splits=n_splits)
     if cv == "timeseries":
-        close_train_dfs, _ = vbt_cv_timeseries_constructor(closes, n_splits=n_splits)
-        open_train_dfs, _ = vbt_cv_timeseries_constructor(opens, n_splits=n_splits)
+        close_train_dfs, close_validate_dfs = vbt_cv_timeseries_constructor(closes, n_splits=n_splits)
+        open_train_dfs, open_validate_dfs = vbt_cv_timeseries_constructor(opens, n_splits=n_splits)
     
     # Generate initial population
     generation = init_generate_population(params, population=population)
@@ -123,7 +123,7 @@ def geneticCV(
         # Execute our cross validation function concurrently on `max_worker` processors
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for result in executor.map(
-                testParamsgenetic, 
+                validateParamsgenetic, 
                 repeat(close_train_dfs), 
                 repeat(open_train_dfs), 
                 batches,
@@ -134,13 +134,16 @@ def geneticCV(
                 repeat(order_size),
                 repeat(freq),
                 repeat(hedge),
+                repeat(open_validate_dfs),
+                repeat(close_validate_dfs),
             ):
                 results.append(result)
 
         df = pd.concat(results)
 
-        adjustor = (1 - (1 / df["trade_count"])) ** trade_const
-        df["fitness"] = df["Weighted Average"] * adjustor
+        adjustor = (1 - (1 / df["trade_count"])) ** trade_const 
+        df["fitness"] = df["Weighted Average"] * adjustor - df["MSE"]
+        df["fitness"] = np.where(df.fitness < 0, 0, df.fitness)
         
         logging.info(f"Iteration {i} completed")
         logging.info('\n\t'+ df.sort_values("fitness", ascending=False).head(10).to_string().replace('\n', '\n\t'))

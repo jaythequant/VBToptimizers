@@ -1,6 +1,7 @@
 import logging
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from optimizers.train import geneticCV
 
 # Logging config
@@ -35,6 +36,9 @@ if __name__ == "__main__":
     opens = pd.read_csv("optimizers/data/hourly_open_data.csv", index_col="time")
     closes = pd.read_csv("optimizers/data/hourly_close_data.csv", index_col="time")
 
+    opens, _ = train_test_split(opens, test_size=0.20, train_size=0.80, shuffle=False)
+    closes, _ = train_test_split(closes, test_size=0.20, train_size=0.80, shuffle=False)
+
     df = geneticCV(
             opens, closes, params,
             n_iter=60,
@@ -46,7 +50,8 @@ if __name__ == "__main__":
             trade_const=2.5,
             cv="timeseries",
             burnin=100,
+            freq="h",
         )
 
     logging.info("Genetic algorithm search completed.")
-    df.to_csv("final_set.csv")
+    df.to_csv("results.csv")
