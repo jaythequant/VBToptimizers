@@ -1,7 +1,6 @@
 __pycache__
 .env
 *.log
-res.csv
+*.csv
 test.py
 test.ipynb
-final_set.csv

@@ -12,6 +12,7 @@ from .setup.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
 from .utils.cross_validators import vbt_cv_kfold_constructor
+from .utils.cross_validators import vbt_cv_sliding_constructor
 from .utils.cross_validators import vbt_cv_timeseries_constructor
 
 
@@ -23,7 +24,7 @@ def geneticCV(
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
-    pickle_results:bool=False, hedge="dollar", trade_const=2, cv="timeseries",
+    pickle_results:bool=False, hedge="dollar", trade_const=1, cv="timeseries",
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -93,6 +94,13 @@ def geneticCV(
     if cv == "timeseries":
         close_train_dfs, close_validate_dfs = vbt_cv_timeseries_constructor(closes, n_splits=n_splits)
         open_train_dfs, open_validate_dfs = vbt_cv_timeseries_constructor(opens, n_splits=n_splits)
+    if cv == "sliding":
+        close_train_dfs, close_validate_dfs = vbt_cv_sliding_constructor(
+            closes, n_splits=n_splits, set_lens=(0.50,)
+        )
+        open_train_dfs, open_validate_dfs = vbt_cv_sliding_constructor(
+            opens, n_splits=n_splits, set_lens=(0.50,)
+        )
     
     # Generate initial population
     generation = init_generate_population(params, population=population)
@@ -141,8 +149,8 @@ def geneticCV(
 
         df = pd.concat(results)
 
-        adjustor = (1 - (1 / df["trade_count"])) ** trade_const 
-        df["fitness"] = df["Weighted Average"] * adjustor - df["MSE"]
+        adjustor = (1 / df["trade_count"]) * trade_const
+        df["fitness"] = df["Weighted Average"] - adjustor - df["MSE"]
         df["fitness"] = np.where(df.fitness < 0, 0, df.fitness)
         
         logging.info(f"Iteration {i} completed")
@@ -168,11 +176,9 @@ def geneticCV(
         )
 
         # Measure and report some statistics
-        most_fit = df.fitness.idxmax()
-        highest_wr = df.fitness.max()
-        average_wr = df.fitness.mean()
+        highest_wr = df["Weighted Average"].max()
+        average_wr = df["Weighted Average"].mean()
         s = highest_wr - average_wr
-        logging.info(f"{most_fit} ---> {highest_wr:.4f}")
         logging.info(f"Spread: {highest_wr:.4f} - {average_wr:.4f} = {s:.4f}")
 
     return df

@@ -55,7 +55,7 @@ def vbt_cv_kfold_constructor(df, n_splits=5, shuffle=False, random_state=None):
     return train_folds, test_folds
 
 
-def vbt_cv_sliding_constructor(df, n_splits, set_lens=(), min_len=1):
+def vbt_cv_sliding_constructor(df, n_splits=5, set_lens=(), min_len=1):
     """
     Cross validator using vectorbt implementation of sliding window CV
     :param df: Dataframe object for constructor to split
@@ -71,7 +71,6 @@ def vbt_cv_sliding_constructor(df, n_splits, set_lens=(), min_len=1):
     :returns: List of dataframes in slider CV intervals
     """
     if not set_lens:
-        """Returns single list of dataframes with no explicit test data"""
         try: 
             split_sets, split_idx = df.vbt.range_split(n=n_splits, min_len=min_len, set_lens=set_lens)
         except ValueError as e:
@@ -87,7 +86,6 @@ def vbt_cv_sliding_constructor(df, n_splits, set_lens=(), min_len=1):
         return split_folds
 
     elif len(set_lens) == 1:
-        """Splits each n_split into training and testing dataframes returning tuple object"""
         try:
             (train_df, train_idx), (test_df, test_idx) = df.vbt.range_split(n=n_splits, min_len=min_len, set_lens=set_lens)
         except ValueError as e:
