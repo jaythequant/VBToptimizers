@@ -68,6 +68,19 @@ def extract_duration(pf, interval) -> int:
     return dur_ser
 
 
+def calculate_profit_ratio(pf) -> pd.Series:
+    trades = pf.trades.records_readable
+    trades["Column"] = trades["Column"].str[:-1]
+    g = trades.groupby("Column")
+
+    profit_ratio_dict = {}
+
+    for idx, gr in g:
+        net = gr.groupby("Entry Timestamp").agg({"PnL": sum})
+        mean_profit = net
+
+
+
 def generate_random_sample(n_iter=100, require_unique=True):
     """Generate a set of random samples"""
     samples = [] 

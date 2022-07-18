@@ -1,3 +1,4 @@
+from decimal import DivisionByZero
 import numpy as np
 from numba import njit
 from collections import namedtuple
@@ -81,10 +82,27 @@ def pre_segment_func_nb(c, memory, params, size, mode, hedge):
     # This window can be specified as a slice
     window_slice = slice(max(0, c.i + 1 - params.period), c.i + 1)
 
-    # Ultimately I will remove the mode flag as I am compartmentalizing models into different setup files
-    if mode == "Kalman":
+    if mode == "cummlog":
+        x_arr = c.close[:, c.from_col]
+        y_arr = c.close[:, c.from_col + 1]
+        # Calculate cummulative log returns. Note, we cannot use np.diff due to a bug in numba
+        log_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
+        log_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
+        
+        X = log_x[c.i]
+        y = log_y[c.i]
+
+        Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
+
+        memory.spread[c.i] = e[0]
+        memory.theta[0:2] = theta
+        memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
+        memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
+        yhat = yhat[0]
+
+    if mode == "default":
         X = c.close[c.i, c.from_col]                     
-        y = c.close[c.i, c.from_col + 1]            
+        y = c.close[c.i, c.from_col + 1]
 
         Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
@@ -110,38 +128,48 @@ def pre_segment_func_nb(c, memory, params, size, mode, hedge):
         spread_std = np.std(memory.spread[window_slice])
         memory.zscore[c.i] = (memory.spread[c.i] - spread_mean) / spread_std
 
-        outlay = (c.last_value * params.order_size) # Determine cash outlay based on pct order_size input
+        # outlay = (c.last_value * params.order_size) # Determine cash outlay based on pct order_size input
+        outlay = 100_000 * params.order_size
+
+        # Notes on handling the spread dynamic....
+        # "long spread" = z_t < lower
+        # In a long spread, we... sell X asset, buy y asset
+        # "short spread" = z_t > upper
+        # In a short spread, we... buy y asset, sell X asset
+
+        # Currently spread buys and sell are implemented the opposite to my intuition
+        # This bears further review, but at present yield significant better results
 
         # Check if any bound is crossed
         # Since zscore is calculated using close, use zscore of the previous step
         # This way we are executing signals defined at the previous bar
-        if memory.zscore[c.i - 1] > params.upper and memory.status[0] != 1:
-            # The convoluted sizing equation below does the following: 
-            # (a) Purchases a dynamic number of shares based on percent of portfolio value
-            # (b) Uses dynamic hedge ratio to purchase approx. $$ equivilent number independent asset
-            # REQUIRES FURTHER REVIEW TO ENSURE BEHAVIOR IS APPROPRIATE
+        if memory.zscore[c.i - 1] > params.upper and memory.status[0] != 1 and memory.status[0] != 2:
+             # we going short the spread
+             # Buy y, sell X
             if hedge == "dollar":
-                size[0] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
-                size[1] = (outlay / c.close[c.i - 1, c.from_col + 1])[0]
+                size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
+                size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = -((outlay * theta[0]) / c.close[c.i - 1, c.from_col])[0]
-                size[1] = (outlay / c.close[c.i - 1, c.from_col + 1])[0]
-            c.call_seq_now[0] = 0
-            c.call_seq_now[1] = 1
+                size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
+            c.call_seq_now[0] = 1
+            c.call_seq_now[1] = 0
             memory.status[0] = 1
             
             # Note that x_t = c.close[c.i - 1, c.from_col]
             # and y_t = c.close[c.i - 1, c.from_col + 1]
 
-        elif memory.zscore[c.i - 1] < params.lower and memory.status[0] != 2:
+        elif memory.zscore[c.i - 1] < params.lower and memory.status[0] != 2 and memory.status[0] != 1:
+            # We are going long the spread
+            # Buy X, sell y
             if hedge == "dollar":
-                size[0] = (outlay / c.close[c.i - 1, c.from_col + 1])[0] * (yhat / c.close[c.i - 1, c.from_col])
-                size[1] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0]
+                size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
+                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = ((outlay * theta[0]) / c.close[c.i - 1, c.from_col])[0]
-                size[1] = -(outlay / c.close[c.i - 1, c.from_col + 1])[0]
-            c.call_seq_now[0] = 1  # execute the second order first to release funds early
-            c.call_seq_now[1] = 0
+                size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
+            c.call_seq_now[0] = 0  # execute the second order first to release funds early
+            c.call_seq_now[1] = 1
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
