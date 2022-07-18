@@ -1,4 +1,3 @@
-from decimal import DivisionByZero
 import numpy as np
 from numba import njit
 from collections import namedtuple
@@ -9,6 +8,7 @@ from vectorbt.portfolio.enums import SizeType
 
 Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status'))       
 Params = namedtuple("Params", ('period', 'upper', 'lower', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
+Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y"))
 
 
 @njit
@@ -43,6 +43,14 @@ def pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_siz
     spread = np.full(c.target_shape[0], np.nan, dtype=np.float_)
     zscore = np.full(c.target_shape[0], np.nan, dtype=np.float_)
 
+    # Calculate the transformation upfront to reference (if needed) later
+    x_arr = c.close[:, c.from_col]
+    y_arr = c.close[:, c.from_col + 1]
+    log_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
+    log_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
+
+    transformations = Transformations(log_x, log_y) # Store the transformations here
+
     # Add matrix names and descriptions as notes for posterior review
     theta = np.full(2, 0, dtype=np.float_)          # 2x1 matrix representing beta, intercept from filter
     Rt = np.full((2,2), np.nan, dtype=np.float_)    # Generates matrix of [[0,0],[0,0]]
@@ -68,11 +76,11 @@ def pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_siz
     
     size = np.empty(c.group_len, dtype=np.float_)
 
-    return (memory, params, size)
+    return (memory, params, size, transformations)
     
 
 @njit
-def pre_segment_func_nb(c, memory, params, size, mode, hedge):
+def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
     """Prepare the current segment (= row within group)."""
     
     # In state space implentation a burn-in period is needed
@@ -83,36 +91,19 @@ def pre_segment_func_nb(c, memory, params, size, mode, hedge):
     window_slice = slice(max(0, c.i + 1 - params.period), c.i + 1)
 
     if mode == "cummlog":
-        x_arr = c.close[:, c.from_col]
-        y_arr = c.close[:, c.from_col + 1]
-        # Calculate cummulative log returns. Note, we cannot use np.diff due to a bug in numba
-        log_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
-        log_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
-        
-        X = log_x[c.i]
-        y = log_y[c.i]
-
-        Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
-
-        memory.spread[c.i] = e[0]
-        memory.theta[0:2] = theta
-        memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
-        memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
-        yhat = yhat[0]
-
+        X = transformations.cumm_x[c.i]
+        y = transformations.cumm_y[c.i]
     if mode == "default":
         X = c.close[c.i, c.from_col]                     
         y = c.close[c.i, c.from_col + 1]
 
-        Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
+    Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
-        # Update all memory variables for next iteration of filter process
-        # Also isolate yhat float val from array (neccesary due to immutability of namedtuples)
-        memory.spread[c.i] = e[0]
-        memory.theta[0:2] = theta
-        memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
-        memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
-        yhat = yhat[0]
+    memory.spread[c.i] = e[0]
+    memory.theta[0:2] = theta
+    memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
+    memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
+    yhat = yhat[0]
 
     # This statement ensures that no extraneous computing is done for signal calc prior 
     # to the burn-in period
@@ -156,8 +147,8 @@ def pre_segment_func_nb(c, memory, params, size, mode, hedge):
             c.call_seq_now[1] = 0
             memory.status[0] = 1
             
-            # Note that x_t = c.close[c.i - 1, c.from_col]
-            # and y_t = c.close[c.i - 1, c.from_col + 1]
+        # Note that x_t = c.close[c.i - 1, c.from_col]
+        # and y_t = c.close[c.i - 1, c.from_col + 1]
 
         elif memory.zscore[c.i - 1] < params.lower and memory.status[0] != 2 and memory.status[0] != 1:
             # We are going long the spread
