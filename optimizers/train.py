@@ -6,9 +6,9 @@ from itertools import repeat
 
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
-from .setup.lqe_setup import *
-from .setup._cv_orders import validateParamsgenetic, testParamsrandom
-from .setup.statistics import generate_random_sample
+from .simulations.lqe_setup import *
+from .simulations._cv_orders import validateParamsgenetic, testParamsrandom
+from .simulations.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
 from .utils.cross_validators import vbt_cv_kfold_constructor
