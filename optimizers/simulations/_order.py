@@ -122,7 +122,10 @@ def simulate_mult_from_order_func(
     close_prices, open_prices, params, commission=0.0008, slippage=0.0005, mode="default", 
     cash=100_000, order_size=0.10, burnin=500, freq="m", interval="minutes", hedge="dollar",
 ):
-    """Backtest multiple parameter combinations as cartesian product"""
+    """Backtest multiple parameter combinations as cartesian product
+    
+    DOES NOT WORK. PRESENTS DIVIDE BY ZERO ERROR.
+    """
     # Generate multiIndex columns
     param_product = vbt.utils.params.create_param_product(list(params.values())) # Somehow this got lost at one point
 

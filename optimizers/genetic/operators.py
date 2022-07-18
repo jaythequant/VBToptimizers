@@ -5,7 +5,7 @@ import logging
 from ._exceptions import GeneticAlgorithmException
 
 
-def init_generate_population(search_space, population=10):
+def init_generate_population(search_space, population=10, unique=True):
     """Generate an initial population for the genetic algorithm"""
     sample_set = [] # List of all samples taken
 
@@ -20,6 +20,11 @@ def init_generate_population(search_space, population=10):
         # Append random set of sample to sample_set
         sample_set.append(sample)
     
+    if unique:
+        if pd.DataFrame(sample_set).duplicated().any():
+            sample_set = init_generate_population(
+                search_space, population
+            )
     return sample_set
 
 
