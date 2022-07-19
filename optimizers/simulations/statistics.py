@@ -69,6 +69,7 @@ def extract_duration(pf, interval) -> int:
 
 
 def calculate_profit_ratio(pf) -> pd.Series:
+    """Calculates the profit ratio of median profit to median loss per trade"""
     trades = pf.trades.records_readable
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
@@ -77,8 +78,20 @@ def calculate_profit_ratio(pf) -> pd.Series:
 
     for idx, gr in g:
         net = gr.groupby("Entry Timestamp").agg({"PnL": sum})
-        mean_profit = net
+        median_profit = net[net > 0].median()
+        median_loss = np.abs(net[net < 0].mean())
+        ratio = median_profit / median_loss
 
+        if median_loss.isna().any():
+            ratio = np.inf
+        if median_profit.isna().any():
+            ratio = -np.inf
+        
+        profit_ratio_dict[idx] = float(ratio)
+
+    ser = pd.Series(profit_ratio_dict.values(), index=profit_ratio_dict.keys(), name="profit_ratio")
+
+    return ser
 
 
 def generate_random_sample(n_iter=100, require_unique=True):

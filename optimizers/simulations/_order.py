@@ -3,14 +3,15 @@ import pandas as pd
 import gc
 
 from .lqe_setup import * 
-from .statistics import extract_duration, extract_wr, number_of_trades
+from .statistics import calculate_profit_ratio, extract_duration, extract_wr, number_of_trades
 
 
 def simulate_from_order_func(
     close_data:pd.DataFrame, open_data:pd.DataFrame, period:float, upper:float,
     lower:float, exit:float, burnin:int=500, delta:float=1e-5, vt:float=1.0, 
     mode:str="default", cash:int=100_000, commission:float=0.0008, 
-    slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, hedge:str="dollar",
+    slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
+    hedge:str="dollar",
 ):
     """Highly configurable pair trade backtest environment built on vectorBT
 
@@ -90,6 +91,7 @@ def simulate_from_order_func(
 
     Returns
     -------
+    vectorbt.portfolio.base.Portfolio
         Portfolio object with a large amount of review data regarding the simulation
         results. See https://vectorbt.dev/ for information.
     """
@@ -177,10 +179,12 @@ def simulate_mult_from_order_func(
 
 
 def simulate_batch_from_order_func(
-    close_prices, open_prices, params, commission=0.0008, slippage=0.0005, mode="default", 
-    cash=100_000, order_size=0.10, burnin=500, freq="m", interval="minutes", hedge="dollar",
+    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
+    cash:int=100_000, order_size:float=0.10, burnin:int=500, 
+    freq:None or str=None, interval:str="minutes", hedge:str="dollar",
 ):
-    """Backtest pre-batched param sets [Param sets must be pre-defined]"""
+    """Backtest batched param sets [Param sets must be pre-defined]"""
     # Generate multiIndex columns
     param_tuples = list(zip(*params.values()))
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
@@ -215,11 +219,12 @@ def simulate_batch_from_order_func(
     )
 
     # Append results of each param comb to CSV file
-    # total_return = pf.total_return()    # Extract total return for each param
-    # wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
-    # dur = extract_duration(pf, interval) # Extract median trade duration in hours
-    # trades = number_of_trades(pf)
+    total_return = pf.total_return()    # Extract total return for each param
+    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
+    dur = extract_duration(pf, interval) # Extract median trade duration in hours
+    trades = number_of_trades(pf)
+    profit_ratio = calculate_profit_ratio(pf)
     # Append params results to CSV for later analysis
-    # res = pd.concat([total_return, wr, dur, trades], axis=1)
+    res = pd.concat([total_return, wr, dur, trades, profit_ratio], axis=1)
     gc.collect()
-    return pf
+    return res

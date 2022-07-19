@@ -1,14 +1,13 @@
 import numpy as np
 from numba import njit
 from collections import namedtuple
-
 from vectorbt.portfolio import nb as portfolio_nb
 from vectorbt.base.reshape_fns import flex_select_auto_nb
 from vectorbt.portfolio.enums import SizeType
 
 Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status'))       
 Params = namedtuple("Params", ('period', 'upper', 'lower', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
-Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y"))
+Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "logr_y", "log_x", "log_y"))
 
 
 @njit
@@ -46,10 +45,14 @@ def pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_siz
     # Calculate the transformation upfront to reference (if needed) later
     x_arr = c.close[:, c.from_col]
     y_arr = c.close[:, c.from_col + 1]
-    log_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
-    log_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
+    cumm_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
+    cumm_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
+    logr_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1])
+    logr_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1])
+    log_x = np.log(x_arr)
+    log_y = np.log(y_arr)
 
-    transformations = Transformations(log_x, log_y) # Store the transformations here
+    transformations = Transformations(cumm_x, cumm_y, logr_x, logr_y, log_x, log_y) # Store the transformations here
 
     # Add matrix names and descriptions as notes for posterior review
     theta = np.full(2, 0, dtype=np.float_)          # 2x1 matrix representing beta, intercept from filter
@@ -90,12 +93,18 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
     # This window can be specified as a slice
     window_slice = slice(max(0, c.i + 1 - params.period), c.i + 1)
 
+    if mode == "default":
+        X = c.close[c.i, c.from_col]         
+        y = c.close[c.i, c.from_col + 1]
     if mode == "cummlog":
         X = transformations.cumm_x[c.i]
         y = transformations.cumm_y[c.i]
-    if mode == "default":
-        X = c.close[c.i, c.from_col]                     
-        y = c.close[c.i, c.from_col + 1]
+    if mode == "logret":
+        X = transformations.logr_x[c.i]
+        y = transformations.logr_y[c.i]
+    if mode == "log":
+        X = transformations.log_x[c.i]
+        y = transformations.log_y[c.i]
 
     Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
@@ -119,8 +128,8 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
         spread_std = np.std(memory.spread[window_slice])
         memory.zscore[c.i] = (memory.spread[c.i] - spread_mean) / spread_std
 
-        # outlay = (c.last_value * params.order_size) # Determine cash outlay based on pct order_size input
-        outlay = 100_000 * params.order_size
+        outlay = c.last_value[c.group] * params.order_size
+        # print(c.from_col, outlay)
 
         # Notes on handling the spread dynamic....
         # "long spread" = z_t < lower
@@ -135,8 +144,8 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
         # Since zscore is calculated using close, use zscore of the previous step
         # This way we are executing signals defined at the previous bar
         if memory.zscore[c.i - 1] > params.upper and memory.status[0] != 1 and memory.status[0] != 2:
-             # we going short the spread
-             # Buy y, sell X
+            # we going short the spread
+            # Buy y, sell X
             if hedge == "dollar":
                 size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
                 size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
@@ -165,16 +174,16 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
 
         elif memory.status[0] == 1:
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
-                size[0] = 0.0
-                size[1] = 0.0
+                size[0] = 0
+                size[1] = 0
                 c.call_seq_now[0] = 1
                 c.call_seq_now[1] = 0
                 memory.status[0] = 0
             
         elif memory.status[0] == 2:
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
-                size[0] = 0.0
-                size[1] = 0.0
+                size[0] = 0
+                size[1] = 0
                 c.call_seq_now[0] = 0
                 c.call_seq_now[1] = 1
                 memory.status[0] = 0
@@ -197,4 +206,5 @@ def order_func_nb(c, size, price, commperc, slippage):
         size_type=SizeType.TargetAmount,
         fees=commperc,
         slippage=slippage,
+        lock_cash=False,
     )

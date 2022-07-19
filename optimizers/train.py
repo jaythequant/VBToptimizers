@@ -7,7 +7,7 @@ from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
 from .simulations.lqe_setup import *
-from .simulations._cv_orders import validateParamsgenetic, testParamsrandom
+from .simulations._cv_orders import trainParams, testParams
 from .simulations.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
@@ -131,7 +131,7 @@ def geneticCV(
         # Execute our cross validation function concurrently on `max_worker` processors
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for result in executor.map(
-                validateParamsgenetic, 
+                trainParams, 
                 repeat(close_train_dfs), 
                 repeat(open_train_dfs), 
                 batches,
@@ -240,7 +240,7 @@ def randomSearch(
     best_ret = None
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=workers) as executor:
-        for result in executor.map(testParamsrandom, repeat(close_train_dfs), repeat(open_train_dfs), sample_set):
+        for result in executor.map(testParams, repeat(close_train_dfs), repeat(open_train_dfs), sample_set):
             sample, wr, ret = result # Unpack out result into params, win rate, and total return
             if not best_comb:
                 best_comb = sample
