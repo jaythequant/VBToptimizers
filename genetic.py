@@ -25,10 +25,10 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(50, 2000, 20, dtype=int),
+        "period": np.arange(10, 100, 10, dtype=int),
         "upper": np.arange(2.0, 5.2, 0.1, dtype=float),
         "lower": np.arange(2.0, 5.2, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.5, 2.1, 0.1, dtype=float),
+        "exit": np.arange(0.5, 2.0, 0.1, dtype=float),
         "delta": 0.1 ** np.arange(1, 10, 1, dtype=float),
         "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
     }
@@ -42,17 +42,18 @@ if __name__ == "__main__":
     df = geneticCV(
             opens, closes, params,
             n_iter=100,
-            n_batch_size=13,
-            population=150,
+            n_batch_size=10,
+            population=200,
             rank_method="rank_space",
             elitism={0: 0.167, 50: 0.333, 80: 0.667},
             diversity={0: 0.667, 70: 0.333, 90: 0.000},
             cv="sliding",
-            burnin=100,
-            freq="h",
-            hedge="dollar",
+            burnin=200,
+            hedge="beta",
+            mode="cummlog",
             max_workers=None,
             n_splits=4,
+            trade_const=4,
         )
 
     logging.info("Genetic algorithm search completed.")

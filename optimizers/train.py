@@ -20,11 +20,12 @@ def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
     n_batch_size:int or None=None, max_workers:int or None=None,
-    slippage:float=0.0005, cash:int=100_000, freq:str="m",
+    slippage:float=0.0050, cash:int=100_000, freq:str="m",
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
     pickle_results:bool=False, hedge="dollar", trade_const=1, cv="timeseries",
+    mode="default",
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -144,13 +145,14 @@ def geneticCV(
                 repeat(hedge),
                 repeat(open_validate_dfs),
                 repeat(close_validate_dfs),
+                repeat(mode),
             ):
                 results.append(result)
 
         df = pd.concat(results)
 
         adjustor = (1 / df["trade_count"]) * trade_const
-        df["fitness"] = df["Weighted Average"] - adjustor - df["MSE"]
+        df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor - df["MSE"]
         df["fitness"] = np.where(df.fitness < 0, 0, df.fitness)
         
         logging.info(f"Iteration {i} completed")
