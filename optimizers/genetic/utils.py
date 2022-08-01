@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import warnings
+from itertools import chain
 from .operators import mutation
 from ._exceptions import GeneticAlgorithmException
 
@@ -118,10 +119,12 @@ def _batch_populations(population:list, n_batch_size:int=None, n_batches:int=Non
             batches.append(batch)
 
     # Split into n batches with unspecified size
+    # Currently this part does not work
     if n_batches and not n_batch_size:
         np_batches = np.array_split(population, n_batches)
         for b in np_batches:
-            batch = _make_numpy_dictionary(list(b))
-            batches.append(batch) # Convert np.array to list
+            # batch = _make_numpy_dictionary(list(b))
+            batches.append(b) # Convert np.array to list
+        batches = list(chain.from_iterable(batches))
 
     return batches

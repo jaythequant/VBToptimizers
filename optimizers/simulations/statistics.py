@@ -68,7 +68,7 @@ def extract_duration(pf, interval) -> int:
     return dur_ser
 
 
-def calculate_profit_ratio(pf) -> pd.Series:
+def calculate_profit_ratio(pf, median=True, handle_inf=10) -> pd.Series:
     """Calculates the profit ratio of median profit to median loss per trade"""
     trades = pf.trades.records_readable
     trades["Column"] = trades["Column"].str[:-1]
@@ -78,18 +78,25 @@ def calculate_profit_ratio(pf) -> pd.Series:
 
     for idx, gr in g:
         net = gr.groupby("Entry Timestamp").agg({"PnL": sum})
-        median_profit = net[net > 0].median()
-        median_loss = np.abs(net[net < 0].mean())
-        ratio = median_profit / median_loss
+        if median:
+            profit = net[net > 0].median()
+            loss = np.abs(net[net < 0].median())
+        else:
+            profit = net[net > 0].mean()
+            loss = np.abs(net[net < 0].mean())
+        ratio = profit / loss
 
-        if median_loss.isna().any():
+        if loss.isna().any():
             ratio = np.inf
-        if median_profit.isna().any():
-            ratio = -np.inf
-        
+        if profit.isna().any():
+            ratio = -np.inf        
         profit_ratio_dict[idx] = float(ratio)
 
-    ser = pd.Series(profit_ratio_dict.values(), index=profit_ratio_dict.keys(), name="profit_ratio")
+        ser = pd.Series(
+            profit_ratio_dict.values(), 
+            index=profit_ratio_dict.keys(), 
+            name="profit_ratio"
+        ).replace(np.inf, handle_inf)
 
     return ser
 

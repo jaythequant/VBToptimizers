@@ -3,7 +3,6 @@ import concurrent.futures
 import numpy as np
 import pandas as pd
 from itertools import repeat
-
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
 from .simulations.lqe_setup import *
@@ -20,12 +19,12 @@ def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
     n_batch_size:int or None=None, max_workers:int or None=None,
-    slippage:float=0.0050, cash:int=100_000, freq:str="m",
+    slippage:float=0.0005, cash:int=100_000, freq:str="m",
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
     pickle_results:bool=False, hedge="dollar", trade_const=1, cv="timeseries",
-    mode="default",
+    mode="default", validation_set:None or float=None,
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -39,8 +38,8 @@ def geneticCV(
             in consistent.
         closes : pd.DataFrame
             Dataset of close prices per bar for asset pair. This dataframe should
-            be specified with an identical index to the opens dataframe. If it is 
-            not there will be consistent test results.
+            be specified with an identical index to the opens dataframe. Results will
+            be corrupted if indices differ in any way.
         params : dict
         n_iter : int, optional
             Maximum number of iterations to run genetic algorithm for optimization.
@@ -53,28 +52,40 @@ def geneticCV(
             Percentage rate at which each genome will be allowed to produce an 
             offspring with another genome in the population. Default = 1.00
         mutation_rate : float, optional
-            Percentage change that a genome will be "mutated". Mutation refers to 
+            Percentage chance that a genome will be "mutated". Mutation refers to 
             a randomly selected gene (parameter) within the genome (set of parameters)
             being replaced by a randomly selected *different* gene.
         n_splits : int, optional
             Number of splits to use for cross-validation training. Default = 5. 
             To avoid using cross-validation set `cv=None`.
         n_batch_size : int, optional
-        max_workers : int, optional
-        min_trades : int
-        commission : float
-        slippage : float
-        cash : int
-        order_size : float
+        max_workers : None or int, optional
+            Max allowable workers for multiprocessing. If `max_workers=None`, a variable
+            number of workers will be created optimized to the amount of compute available.
+            See `concurrent.futures.ProcessPoolExecutor` documentation for more.
+        commission : float, optional
+            Set fixed percentage commission charged per trade placed during simulation.
+            Default value is `0.0008`
+        slippage : float, optional
+            Set fixed percentage slippage applied to each trade placed during simulation.
+            Be aware that slippage will always make the trade less favorable and will apply
+            negative slippage to short trades and positive slippage to long trades ensuring
+            that slippage always worsens the return, never aids it. Default = `0.0005`
+        cash : int, optional
+            Set starting cash for portfolio object. Default = `100_000`
+        order_size : float, optional
+            Set in percentage terms the amount of the portfolio to allocate to a single trade.
+            Note that as this is a long short strategy `order_size` * `portfolio.value()`
+            units will be allocated to **both** sides of the trade.
         freq : str, optional
-            Frequency at which open and close data appears.
+            Frequency at which open and close data appears. If `freq=None`, `vectorBT` will 
+            attempt to surmise the appropriate frequency. Default = `None`
         rank_method : str
         burnin : int
             Burnin period before which no rolling statistics are included. 
             Burnin periods are extremely important for the LQE process, but are
             highly subjective to the data used. Please review the following link
             for further information on finding an appropriate burnin period:
-        export_results : bool
         n_batches : int or None, optional
             Rather than specifying batch size, we can specify batch count using this
             parameter. See also `n_batch_size` for specifying batch size. Note that
@@ -96,12 +107,18 @@ def geneticCV(
         close_train_dfs, close_validate_dfs = vbt_cv_timeseries_constructor(closes, n_splits=n_splits)
         open_train_dfs, open_validate_dfs = vbt_cv_timeseries_constructor(opens, n_splits=n_splits)
     if cv == "sliding":
-        close_train_dfs, close_validate_dfs = vbt_cv_sliding_constructor(
-            closes, n_splits=n_splits, set_lens=(0.50,)
-        )
-        open_train_dfs, open_validate_dfs = vbt_cv_sliding_constructor(
-            opens, n_splits=n_splits, set_lens=(0.50,)
-        )
+        if validation_set:
+            close_train_dfs, close_validate_dfs = vbt_cv_sliding_constructor(
+                closes, n_splits=n_splits, set_lens=(validation_set,)
+            )
+            open_train_dfs, open_validate_dfs = vbt_cv_sliding_constructor(
+                opens, n_splits=n_splits, set_lens=(validation_set,)
+            )
+        else:
+            close_train_dfs = vbt_cv_sliding_constructor(closes, n_splits=n_splits)
+            open_train_dfs = vbt_cv_sliding_constructor(opens, n_splits=n_splits)
+            close_validate_dfs = None
+            open_validate_dfs = None
     
     # Generate initial population
     generation = init_generate_population(params, population=population)
@@ -152,7 +169,13 @@ def geneticCV(
         df = pd.concat(results)
 
         adjustor = (1 / df["trade_count"]) * trade_const
-        df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor - df["MSE"]
+        df["profit_ratio"] = np.where(df["trade_count"] <= 10, 2, df["profit_ratio"])
+        df["profit_ratio"] = np.where(df["trade_count"] <= 5, 0, df["profit_ratio"])
+        # df.replace([np.inf], 10, inplace=True)
+        if validation_set:
+            df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor - df["MSE"]
+        else:
+            df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor
         df["fitness"] = np.where(df.fitness < 0, 0, df.fitness)
         
         logging.info(f"Iteration {i} completed")

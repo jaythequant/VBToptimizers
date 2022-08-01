@@ -6,4 +6,4 @@ def get_csv_data(path):
     df = pd.read_csv(path, index_col="time")
     df.index = pd.to_datetime(df.index)
     df = df.astype(float)
-    return df
+    return df.sort_index(ascending=True)

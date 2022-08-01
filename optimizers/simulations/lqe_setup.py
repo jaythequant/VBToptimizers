@@ -30,7 +30,7 @@ def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
     theta = theta + At.flatten() * et   # Update theta
     C = R - At * F.dot(R)
     
-    return R, C, theta, et, yhat
+    return R, C, theta, et
 
 
 @njit
@@ -45,10 +45,14 @@ def pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_siz
     # Calculate the transformation upfront to reference (if needed) later
     x_arr = c.close[:, c.from_col]
     y_arr = c.close[:, c.from_col + 1]
-    cumm_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
-    cumm_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
-    logr_x = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1])
-    logr_y = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1])
+    cumm_x = np.full(x_arr.shape, 0, dtype=np.float_)
+    cumm_y = np.full(y_arr.shape, 0, dtype=np.float_)
+    logr_x = np.full(x_arr.shape, 0, dtype=np.float_)
+    logr_y = np.full(y_arr.shape, 0, dtype=np.float_)
+    cumm_x[1:] = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
+    cumm_y[1:] = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
+    logr_x[1:] = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1])
+    logr_y[1:] = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1])
     log_x = np.log(x_arr)
     log_y = np.log(y_arr)
 
@@ -93,35 +97,35 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
     # This window can be specified as a slice
     window_slice = slice(max(0, c.i + 1 - params.period), c.i + 1)
 
-    if mode == "default":
-        X = c.close[c.i, c.from_col]         
-        y = c.close[c.i, c.from_col + 1]
-    if mode == "cummlog":
-        X = transformations.cumm_x[c.i]
-        y = transformations.cumm_y[c.i]
-    if mode == "logret":
-        X = transformations.logr_x[c.i]
-        y = transformations.logr_y[c.i]
-    if mode == "log":
-        X = transformations.log_x[c.i]
-        y = transformations.log_y[c.i]
+    if c.i > 0: # Ignore the first element as it is always zero when transformation is applied
+        if mode == "default":
+            X = c.close[c.i, c.from_col]         
+            y = c.close[c.i, c.from_col + 1]
+        if mode == "cummlog":
+            X = transformations.cumm_x[c.i]
+            y = transformations.cumm_y[c.i]
+        if mode == "logret":
+            X = transformations.logr_x[c.i]
+            y = transformations.logr_y[c.i]
+        if mode == "log":
+            X = transformations.log_x[c.i]
+            y = transformations.log_y[c.i]
 
-    Rt, Ct, theta, e, yhat = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
+        Rt, Ct, theta, e = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
-    memory.spread[c.i] = e[0]
-    memory.theta[0:2] = theta
-    memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
-    memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
-    yhat = yhat[0]
+        memory.spread[c.i] = e[0]
+        memory.theta[0:2] = theta
+        memory.Rt[0], memory.Rt[1] = Rt[0], Rt[1]
+        memory.Ct[0], memory.Ct[1] = Ct[0], Ct[1]
 
-    # This statement ensures that no extraneous computing is done for signal calc prior 
-    # to the burn-in period
+        # This statement ensures that no extraneous computing is done for signal calc prior 
+        # to the burn-in period
     if c.i < params.burnin - 1 and c.i < params.period - 1:
         size[0] = np.nan  # size of nan means no order
         size[1] = np.nan
         return (size,)
 
-    if c.i > params.burnin - 1 and c.i > params.period - 1:
+    if c.i > params.burnin + params.period - 1:
 
         # Calculate rolling statistics and normalized z-score
         spread_mean = np.mean(memory.spread[window_slice])
@@ -129,7 +133,6 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
         memory.zscore[c.i] = (memory.spread[c.i] - spread_mean) / spread_std
 
         outlay = c.last_value[c.group] * params.order_size
-        # print(c.from_col, outlay)
 
         # Notes on handling the spread dynamic....
         # "long spread" = z_t < lower
@@ -147,15 +150,15 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             # we going short the spread
             # Buy y, sell X
             if hedge == "dollar":
-                size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
-                size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
+                size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
+                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
-                size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
+                size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
             c.call_seq_now[0] = 1
             c.call_seq_now[1] = 0
             memory.status[0] = 1
-            
+
         # Note that x_t = c.close[c.i - 1, c.from_col]
         # and y_t = c.close[c.i - 1, c.from_col + 1]
 
@@ -163,13 +166,13 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             # We are going long the spread
             # Buy X, sell y
             if hedge == "dollar":
-                size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
-                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
+                size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
+                size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
-                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
+                size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
             c.call_seq_now[0] = 0  # execute the second order first to release funds early
-            c.call_seq_now[1] = 1
+            c.call_seq_now[1] = 1  # Double check this to make sure it is implemented correctly
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
