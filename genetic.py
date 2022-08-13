@@ -1,8 +1,16 @@
 import logging
+import configparser
 import numpy as np
 from sklearn.model_selection import train_test_split
 from optimizers.train import geneticCV
 from optimizers.utils._utils import get_csv_data
+
+config = configparser.ConfigParser()
+config.read("conf.ini")
+genetic = dict(config["genetic"])
+model = dict(config["backtest"])
+compute = dict(config["compute"])
+validation = dict(config["validation"])
 
 # Logging config
 stream_handler = logging.StreamHandler()
@@ -25,35 +33,50 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(10, 200, 10, dtype=int),
+        "period": np.arange(10, 500, 10, dtype=int),
         "upper": np.arange(2.1, 4.1, 0.1, dtype=float),
         "lower": np.arange(2.1, 4.1, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.5, 2.0, 0.1, dtype=float),
+        "exit": np.arange(0.0, 2.0, 0.1, dtype=float),
         "delta": 0.1 ** np.arange(1, 10, 1, dtype=float),
-        "vt": np.arange(0.1, 1.1, 0.1, dtype=float),
+        "vt": np.arange(0.1, 1.6, 0.1, dtype=float),
     }
 
-    opens = get_csv_data("data/jarbtc_open_hourly.csv")
-    closes = get_csv_data("data/jarbtc_closes_hourly.csv")
+    opens = get_csv_data("data/fileos_hourly_opens.csv")
+    closes = get_csv_data("data/fileos_hourly_closes.csv")
 
-    opens, _ = train_test_split(opens, test_size=0.20, train_size=0.80, shuffle=False)
-    closes, _ = train_test_split(closes, test_size=0.20, train_size=0.80, shuffle=False)
+    opens, _ = train_test_split(opens, test_size=0.30, train_size=0.70, shuffle=False)
+    closes, _ = train_test_split(closes, test_size=0.30, train_size=0.70, shuffle=False)
+
+    logging.info(f"""
+    +-- Genetic Algorithm --+ +-- Model Selection --+ +-- Compute Handling -----+
+    |  * Population= 1000   | |  * Population= 1000 | |  * Max Proccesses= 1000 |
+    |  * Iterations= 50     | |  * Population= 1000 | |  * Population= 1000     |
+    |  * Mode= cummlog      | |  * Population= 1000 | |  * Population= 1000     |
+    |  * Hedge= beta        | |  * Population= 1000 | |  * Population= 1000     |
+    |  * CV= sliding        | |  * Population= 1000 | |  * Population= 1000     |
+    +-----------------------+ +---------------------+ +-------------------------+
+    """)
 
     df = geneticCV(
             opens, closes, params,
             n_iter=50,
-            n_batch_size=50,
-            population=500,
+            n_batch_size=75,
+            population=1500,
             rank_method="rank_space",
-            elitism={0: 0.167, 40: 0.333, 80: 0.667},
-            diversity={0: 0.667, 40: 0.333, 90: 0.000},
+            elitism={0: 0.010, 42: 0.500},
+            diversity={0: 1.00, 42: 0.200},
             cv="sliding",
-            burnin=1500,
+            slippage=0.0005,
+            burnin=300,
             hedge="beta",
-            mode="log",
-            max_workers=None,
+            mode="cummlog",
             n_splits=3,
-            trade_const=6,
+            trade_const=0.26,
+            pr_const=0.30,
+            wr_const=1.5,
+            ret_const=1.0,
+            duration_cap=1500,
+            order_size=0.10,
         )
 
     logging.info("Genetic algorithm search completed.")

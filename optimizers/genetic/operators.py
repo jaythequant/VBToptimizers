@@ -1,8 +1,10 @@
+import logging
 import numpy as np
 import pandas as pd
-import logging
-
+from scipy.spatial.distance import cdist
 from ._exceptions import GeneticAlgorithmException
+
+logger = logging.getLogger(__name__)
 
 
 def init_generate_population(search_space, population=10, unique=True):
@@ -97,6 +99,13 @@ def roulette_wheel_selection(
                 "param_3": 3.41,
             },
         ]
+
+    Notes
+    -----
+    Be aware that the implementation of a diversity constant is done through a Hamming distance measure. 
+    The neccesity of remeasuring the hamming distance with each new sample causes the algorithm to scale 
+    at N(O^2). In other words, large population sizes (i.e. `population >= 2000`) will see significant 
+    processing time increases.
     """
     if rank_method == "rank_space" and not rank_space_constant:
         raise GeneticAlgorithmException("Must specify a rank space constant if using rank space method.")
@@ -132,7 +141,7 @@ def roulette_wheel_selection(
 
     # If we do not want to use diversity as a weight we can do this faster sampling method
     if diversity_constant == 0.0:
-        next_generation = fitness_results.sample(
+        genomes = fitness_results.sample(
             n=population,
             weights=fitness_results["p"],
             replace=True,
@@ -143,35 +152,42 @@ def roulette_wheel_selection(
         next_generation = pd.DataFrame()
 
         for _ in range(population):
-            fitness_results["i"] = fitness_results.index
-            fitness_results["d"] = fitness_results.i.apply(lambda x: _hamming_distance(x, next_generation))
-            fitness_results["adj_fitness"] = fitness_results.fitness + diversity_constant * fitness_results.d
+            if not next_generation.empty:
+                fitness_results["d"] = cdist(
+                    np.array(list(next_generation.index)),
+                    np.array(list(fitness_results.index)),
+                    "hamming",
+                ).mean(axis=0)
+                fitness_results["adj_fitness"] = fitness_results.fitness + diversity_constant * fitness_results.d
 
-            fitness_results["p"] = np.where(
-                fitness_results.adj_fitness == fitness_results.adj_fitness.max(), 
-                rank_space_constant, 
-                1 - rank_space_constant,
-            )
-            # Sort greatest to smallest probabilities
-            fitness_results = fitness_results.sort_values(by="adj_fitness", ascending=False)
-            # Add column representing exponents for rank space equation
-            fitness_results["exp"] = np.arange(0, fitness_results.shape[0])
-            # Calculate rank space probability weights
-            fitness_results["p"] = np.where(
-                fitness_results["exp"] > 0, 
-                fitness_results["p"] ** fitness_results["exp"] * rank_space_constant, 
-                fitness_results["p"]
-            )
+                fitness_results["p"] = np.where(
+                    fitness_results.adj_fitness == fitness_results.adj_fitness.max(), 
+                    rank_space_constant, 
+                    1 - rank_space_constant,
+                )
+                # Sort greatest to smallest probabilities
+                fitness_results = fitness_results.sort_values(by="adj_fitness", ascending=False)
+                # Add column representing exponents for rank space equation
+                fitness_results["exp"] = np.arange(0, fitness_results.shape[0])
+                # Calculate rank space probability weights
+                fitness_results["p"] = np.where(
+                    fitness_results["exp"] > 0, 
+                    fitness_results["p"] ** fitness_results["exp"] * rank_space_constant, 
+                    fitness_results["p"]
+                )
+                x = fitness_results.sample(n=1, weights=fitness_results.p)
+                next_generation = pd.concat([next_generation, x])
+            else:
+                # This prevents cdist from raising ValueError due to empty array
+                x = fitness_results.sample(n=1, weights=fitness_results.p)
+                next_generation = pd.concat([next_generation, x])
 
-            x = fitness_results.sample(n=1, weights=fitness_results.p)
-            next_generation = pd.concat([next_generation, x])
-
-    # Label parameter tupes with param names and wrap in dictionary
+    # Label parameter tuples with param names and wrap in dictionary
     # Append dictionary genomes to a list of all genomes in population
     genomes = []
     for gen in list(next_generation.index):
         g = dict(zip(param_labels, gen))
-        genomes.append(g)
+        genomes.append(g)    
 
     return genomes
 
@@ -293,20 +309,3 @@ def mutation(
             genome[random_parameter] = round(gene, 10)
     # Repeat for all genomes and genes
     return generation
-
-
-def _hamming_distance(gx:tuple, next_generation:pd.DataFrame) -> float:
-    """Calculate average hamming distance for specific genome relative to set of genomes"""
-    if next_generation.empty:
-        return 0
-
-    genomes = list(next_generation.index)
-
-    distances = []
-
-    for gi in genomes:
-        # Compare each item in zipped dictionary of items 
-        d = sum(xi != yi for xi, yi in zip(gx, gi))
-        distances.append(d)
-    
-    return np.mean(distances)

@@ -63,7 +63,7 @@ def extract_duration(pf, interval) -> int:
         dur = getattr(td.Timedelta(delta.median()).total, interval)
         dur_dict[idx] = dur
     
-    dur_ser = pd.Series(dur_dict.values(), index=dur_dict.keys(), name="Duration")
+    dur_ser = pd.Series(dur_dict.values(), index=dur_dict.keys(), name="duration")
 
     return dur_ser
 
@@ -96,7 +96,7 @@ def calculate_profit_ratio(pf, median=True, handle_inf=10) -> pd.Series:
             profit_ratio_dict.values(), 
             index=profit_ratio_dict.keys(), 
             name="profit_ratio"
-        ).replace(np.inf, handle_inf)
+        ).replace([np.inf, -np.inf], handle_inf)
 
     return ser
 

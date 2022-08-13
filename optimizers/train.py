@@ -14,6 +14,8 @@ from .utils.cross_validators import vbt_cv_kfold_constructor
 from .utils.cross_validators import vbt_cv_sliding_constructor
 from .utils.cross_validators import vbt_cv_timeseries_constructor
 
+logger = logging.getLogger(__name__)
+
 
 def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
@@ -23,8 +25,10 @@ def geneticCV(
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
-    pickle_results:bool=False, hedge="dollar", trade_const=1, cv="timeseries",
-    mode="default", validation_set:None or float=None,
+    pickle_results:bool=False, hedge="dollar", trade_const:float=1.0, cv:str="timeseries",
+    mode="default", validation_set:None or float=None, ret_const:float=1.0,
+    pr_const:float=1.0, wr_const:float=1.0, profit_ratio_cap:float=4.0, min_trades:float=10.0,
+    duration_cap:int=1000, dur_const:float=0.50,
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -168,15 +172,25 @@ def geneticCV(
 
         df = pd.concat(results)
 
-        adjustor = (1 / df["trade_count"]) * trade_const
-        df["profit_ratio"] = np.where(df["trade_count"] <= 10, 2, df["profit_ratio"])
-        df["profit_ratio"] = np.where(df["trade_count"] <= 5, 0, df["profit_ratio"])
-        # df.replace([np.inf], 10, inplace=True)
-        if validation_set:
-            df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor - df["MSE"]
-        else:
-            df["fitness"] = df["profit_ratio"] * df["Weighted Average"] - adjustor
-        df["fitness"] = np.where(df.fitness < 0, 0, df.fitness)
+        df["profit_ratio"] = np.where(df["trade_count"] <= min_trades, 1, df["profit_ratio"]) # nuetralize meaningless profit ratios
+        df["profit_ratio"] = np.where(
+            df["profit_ratio"] >= profit_ratio_cap, 
+            profit_ratio_cap, 
+            df["profit_ratio"]
+        ) # normalize outlier ratios past arbitrary cutoff point
+        # Calculate fitness as function of profit ratio, weighted average win-rate, trade count and mean total return
+        # adjusted by constant beta weights inputted on model initiation
+        df["fitness"] = (
+            (pr_const * np.log(df["profit_ratio"])) + 
+            (wr_const * df["Weighted Average"]) + 
+            (trade_const * np.log(df["trade_count"]))
+        ) * (ret_const * (1 + df["total_return"]))
+        df["fitness"] = np.where(
+            df["duration"] > duration_cap, 
+            df["fitness"] * dur_const, 
+            df["fitness"]
+        ) # Punish high duration trades
+        df["fitness"] = np.where(df.fitness < 0, 0, df.fitness) # Ensure that fitness cannot be negative
         
         logging.info(f"Iteration {i} completed")
         logging.info('\n\t'+ df.sort_values("fitness", ascending=False).head(10).to_string().replace('\n', '\n\t'))
@@ -199,12 +213,6 @@ def geneticCV(
         generation = _handle_duplication(
             generation, params, handler=mutation_style, step_size=mutation_steps
         )
-
-        # Measure and report some statistics
-        highest_wr = df["Weighted Average"].max()
-        average_wr = df["Weighted Average"].mean()
-        s = highest_wr - average_wr
-        logging.info(f"Spread: {highest_wr:.4f} - {average_wr:.4f} = {s:.4f}")
 
     return df
 

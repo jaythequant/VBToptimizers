@@ -155,8 +155,8 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             if hedge == "beta":
                 size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
                 size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
-            c.call_seq_now[0] = 1
-            c.call_seq_now[1] = 0
+            c.call_seq_now[0] = 1 # Execute short sale first
+            c.call_seq_now[1] = 0 # Use funds to purchase long side
             memory.status[0] = 1
 
         # Note that x_t = c.close[c.i - 1, c.from_col]
@@ -172,23 +172,23 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
                 size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
             c.call_seq_now[0] = 0  # execute the second order first to release funds early
-            c.call_seq_now[1] = 1  # Double check this to make sure it is implemented correctly
+            c.call_seq_now[1] = 1  
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
                 size[0] = 0
                 size[1] = 0
-                c.call_seq_now[0] = 1
-                c.call_seq_now[1] = 0
+                c.call_seq_now[0] = 0
+                c.call_seq_now[1] = 1
                 memory.status[0] = 0
             
         elif memory.status[0] == 2:
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
                 size[0] = 0
                 size[1] = 0
-                c.call_seq_now[0] = 0
-                c.call_seq_now[1] = 1
+                c.call_seq_now[0] = 1
+                c.call_seq_now[1] = 0
                 memory.status[0] = 0
             
         else:

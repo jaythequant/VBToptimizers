@@ -1,7 +1,7 @@
-import pandas as pd
 import gc
-from ._order import simulate_batch_from_order_func
-from ._order import simulate_from_order_func
+import pandas as pd
+from .order import simulate_batch_from_order_func
+from .order import simulate_from_order_func
 from .statistics import score_results, return_results
 from .statistics import _weighted_average, _calculate_mse
 

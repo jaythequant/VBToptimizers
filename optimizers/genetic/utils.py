@@ -1,9 +1,12 @@
+import warnings
+import logging
 import pandas as pd
 import numpy as np
-import warnings
 from itertools import chain
 from .operators import mutation
 from ._exceptions import GeneticAlgorithmException
+
+logger = logging.getLogger(__name__)
 
 
 def _make_numpy_dictionary(params:dict):
