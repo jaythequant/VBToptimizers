@@ -196,8 +196,8 @@ def geneticCV(
             df["fitness"]
         ) # Punish high duration trades
         df["fitness"] = np.where(
-            df["trade_count"] <= 50,
-            df["fitness"] * df["trade_count"]/50,
+            df["trade_count"] <= 30,
+            df["fitness"] * 0.85,
             df["fitness"]
         ) # Punish low trade counts
         df["fitness"] = np.where(

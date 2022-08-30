@@ -34,19 +34,19 @@ if __name__ == "__main__":
 
     params = {
         "period": np.arange(10, 1000, 10, dtype=int),
-        "upper": np.arange(2.1, 7.1, 0.1, dtype=float),
-        "lower": np.arange(2.1, 7.1, 0.1, dtype=float) * -1.0,
+        "upper": np.arange(2.1, 5.1, 0.1, dtype=float),
+        "lower": np.arange(2.1, 5.1, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.0, 2.1, 0.1, dtype=float),
-        "delta": np.vstack([a * (0.1 ** np.arange(1,10,1)) for a in np.arange(1,10,1)]).flatten(),
+        "delta": np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten(),
         "vt": np.arange(0.01, 2.01, 0.01, dtype=float), # Experimenting with smaller step sizes
     }
 
-    fil = "adazec"
+    fil = "btczec"
     opens = get_csv_data(f"data/{fil}_hourly_opens.csv")
     closes = get_csv_data(f"data/{fil}_hourly_closes.csv")
 
-    opens, _ = train_test_split(opens, test_size=0.30, train_size=0.70, shuffle=False)
-    closes, _ = train_test_split(closes, test_size=0.30, train_size=0.70, shuffle=False)
+    opens, _ = train_test_split(opens, test_size=0.20, train_size=0.80, shuffle=False)
+    closes, _ = train_test_split(closes, test_size=0.20, train_size=0.80, shuffle=False)
 
     logging.info(f"""
     +-- Genetic Algorithm --+ +-- Model Selection --+ +-- Compute Handling -----+
@@ -71,10 +71,10 @@ if __name__ == "__main__":
             burnin=300,
             hedge="beta",
             mode="log",
-            n_splits=3,
-            trade_const=0.225,   # Recommended a 0.225
-            pr_const=0.140,      # Recommended at 0.135
-            wr_const=1.44,      # Recommended at 1.350
+            n_splits=4,
+            trade_const=0.210,   # Recommended a 0.225
+            pr_const=0.135,      # Recommended at 0.135
+            wr_const=1.470,      # Recommended at 1.350
             duration_cap=1440,   # Punish trade duration >=1 day
             order_size=0.10,
             freq="h",
