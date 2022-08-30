@@ -153,8 +153,16 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
                 size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
-                size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
+                # In the event that our beta hedge is greater than 1, we would 
+                # be opening positions much larger than our target percentage size.
+                # In response, open identically profiled positions, but use beta
+                # to scale our contra-asset down by moving to the numerator of the Y asset
+                if theta[0] < 1:
+                    size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                    size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
+                if theta[0] > 1:
+                    size[0] = outlay / c.close[c.i - 1, c.from_col]
+                    size[1] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col]
             c.call_seq_now[0] = 1 # Execute short sale first
             c.call_seq_now[1] = 0 # Use funds to purchase long side
             memory.status[0] = 1
@@ -169,8 +177,12 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
                 size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
             if hedge == "beta":
-                size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
-                size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
+                if theta[0] < 1:
+                    size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                    size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
+                if theta[0] > 1:
+                    size[0] = -outlay / c.close[c.i - 1, c.from_col]
+                    size[1] = (outlay / theta[0]) / c.close[c.i - 1, c.from_col]
             c.call_seq_now[0] = 0  # execute the second order first to release funds early
             c.call_seq_now[1] = 1  
             memory.status[0] = 2

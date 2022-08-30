@@ -158,7 +158,7 @@ def number_of_trades(pf) -> pd.Series:
 
     for idx, gr in g:
         grouped_trades = gr.groupby("Entry Timestamp").sum()
-        trade_count = grouped_trades.shape[0] / 2
+        trade_count = grouped_trades.shape[0]
         num_trades[idx] = trade_count
 
     trades_ser = pd.Series(num_trades.values(), index=num_trades.keys(), name="trade_count")

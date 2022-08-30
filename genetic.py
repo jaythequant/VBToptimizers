@@ -33,16 +33,17 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(10, 500, 10, dtype=int),
-        "upper": np.arange(2.1, 4.1, 0.1, dtype=float),
-        "lower": np.arange(2.1, 4.1, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.0, 2.0, 0.1, dtype=float),
-        "delta": 0.1 ** np.arange(1, 10, 1, dtype=float),
-        "vt": np.arange(0.1, 1.6, 0.1, dtype=float),
+        "period": np.arange(10, 1000, 10, dtype=int),
+        "upper": np.arange(2.1, 7.1, 0.1, dtype=float),
+        "lower": np.arange(2.1, 7.1, 0.1, dtype=float) * -1.0,
+        "exit": np.arange(0.0, 2.1, 0.1, dtype=float),
+        "delta": np.vstack([a * (0.1 ** np.arange(1,10,1)) for a in np.arange(1,10,1)]).flatten(),
+        "vt": np.arange(0.01, 2.01, 0.01, dtype=float), # Experimenting with smaller step sizes
     }
 
-    opens = get_csv_data("data/fileos_hourly_opens.csv")
-    closes = get_csv_data("data/fileos_hourly_closes.csv")
+    fil = "adazec"
+    opens = get_csv_data(f"data/{fil}_hourly_opens.csv")
+    closes = get_csv_data(f"data/{fil}_hourly_closes.csv")
 
     opens, _ = train_test_split(opens, test_size=0.30, train_size=0.70, shuffle=False)
     closes, _ = train_test_split(closes, test_size=0.30, train_size=0.70, shuffle=False)
@@ -59,24 +60,24 @@ if __name__ == "__main__":
 
     df = geneticCV(
             opens, closes, params,
-            n_iter=50,
+            n_iter=30,
             n_batch_size=75,
             population=1500,
             rank_method="rank_space",
-            elitism={0: 0.010, 42: 0.500},
-            diversity={0: 1.00, 42: 0.200},
+            elitism={0: 0.005, 25: 0.500},
+            diversity={0: 1.00, 25: 0.200},
             cv="sliding",
-            slippage=0.0005,
+            slippage=0.0010,
             burnin=300,
             hedge="beta",
-            mode="cummlog",
+            mode="log",
             n_splits=3,
-            trade_const=0.26,
-            pr_const=0.30,
-            wr_const=1.5,
-            ret_const=1.0,
-            duration_cap=1500,
+            trade_const=0.225,   # Recommended a 0.225
+            pr_const=0.140,      # Recommended at 0.135
+            wr_const=1.44,      # Recommended at 1.350
+            duration_cap=1440,   # Punish trade duration >=1 day
             order_size=0.10,
+            freq="h",
         )
 
     logging.info("Genetic algorithm search completed.")
