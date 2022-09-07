@@ -2,7 +2,12 @@ import vectorbt as vbt
 import pandas as pd
 import gc
 
-from .lqe_setup import * 
+from .lqev1 import *
+from .lqev2 import (
+    order_func_nb as order_func_nb2, 
+    pre_group_func_nb as pre_group_func_nb2,
+    pre_segment_func_nb as pre_segment_func_nb2,
+)
 from .statistics import calculate_profit_ratio, extract_duration, extract_wr, number_of_trades
 
 
@@ -213,7 +218,90 @@ def simulate_batch_from_order_func(
     dur = extract_duration(pf, interval) # Extract median trade duration in hours
     trades = number_of_trades(pf)
     profit_ratio = calculate_profit_ratio(pf)
+    sharpe = pf.sharpe_ratio()
     # Append params results to CSV for later analysis
-    res = pd.concat([total_return, wr, dur, trades, profit_ratio], axis=1)
+    res = pd.concat([total_return, wr, dur, trades, profit_ratio, sharpe], axis=1)
     gc.collect()
     return res
+
+
+def simulate_batch_from_order_func_low_param(
+    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
+    cash:int=100_000, order_size:float=0.10, burnin:int=500, 
+    freq:None or str=None, interval:str="minutes", hedge:str="dollar",
+):
+    """Backtest batched param sets [Param sets must be pre-defined]"""
+    # Generate multiIndex columns
+    param_tuples = list(zip(*params.values()))
+    param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
+
+    # We need two price columns per param combination
+    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+
+    # Simulate the portfolio and return portfolio object
+    pf = vbt.Portfolio.from_order_func(
+        vbt_close_price_mult,
+        order_func_nb2,
+        vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
+        pre_group_func_nb=pre_group_func_nb2,
+        pre_group_args=(
+            np.array(params["entry"]),
+            np.array(params["exit"]),
+            np.array(params["delta"]),
+            np.array(params["vt"]),
+            order_size,
+            burnin,
+        ),
+        pre_segment_func_nb=pre_segment_func_nb2,
+        pre_segment_args=(mode, hedge,),
+        fill_pos_record=False,
+        init_cash=cash,
+        cash_sharing=True, 
+        group_by=param_columns.names,
+        freq=freq,
+    )
+
+    # Append results of each param comb to CSV file
+    total_return = pf.total_return()    # Extract total return for each param
+    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
+    dur = extract_duration(pf, interval) # Extract median trade duration in hours
+    trades = number_of_trades(pf)
+    profit_ratio = calculate_profit_ratio(pf)
+    sharpe = pf.sharpe_ratio()
+    # Append params results to CSV for later analysis
+    res = pd.concat([total_return, wr, dur, trades, profit_ratio, sharpe], axis=1)
+    gc.collect()
+    return res
+
+def low_param_simulate_from_order_func(
+    close_data:pd.DataFrame, open_data:pd.DataFrame, entry:float,
+    exit:float, burnin:int=500, delta:float=1e-5, vt:float=1.0, 
+    mode:str="default", cash:int=100_000, commission:float=0.0008, 
+    slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
+    hedge:str="dollar",
+):
+    return vbt.Portfolio.from_order_func(
+        close_data,
+        order_func_nb2, 
+        open_data.values, commission, slippage,  # *args for order_func_nb
+        pre_group_func_nb=pre_group_func_nb2, 
+        pre_group_args=(
+            entry, 
+            exit, 
+            delta, 
+            vt, 
+            order_size, 
+            burnin,
+        ),
+        pre_segment_func_nb=pre_segment_func_nb2, 
+        pre_segment_args=(mode, hedge,),
+        fill_pos_record=False,  # a bit faster
+        init_cash=cash,
+        cash_sharing=True, 
+        group_by=True,
+        freq=freq
+    )
+
+

@@ -1,6 +1,6 @@
 import gc
 import pandas as pd
-from .order import simulate_batch_from_order_func
+from .order import simulate_batch_from_order_func, simulate_batch_from_order_func_low_param
 from .order import simulate_from_order_func
 from .statistics import score_results, return_results
 from .statistics import _weighted_average, _calculate_mse
@@ -10,7 +10,7 @@ def trainParams(
     close_train_sets:list, open_train_sets:list, params:dict, commission:float=0.0008, 
     slippage:float=0.0010, burnin:int=500, cash:int=100_000, order_size:float=0.10, 
     freq:None or str=None, hedge:str="dollar", close_validation_sets:None or list=None, 
-    open_validation_sets:None or list=None, mode:str="default", 
+    open_validation_sets:None or list=None, mode:str="default", model='LQE2',
 ) -> pd.DataFrame:
     """Train param batch against cross-validated training (and validation) data.
 
@@ -52,25 +52,7 @@ def trainParams(
     test_data = zip(close_train_sets, open_train_sets)
 
     for close_prices, open_prices in test_data:
-        df = simulate_batch_from_order_func(
-            close_prices, open_prices, params,
-            burnin=burnin,
-            cash=cash,
-            commission=commission,
-            slippage=slippage,
-            order_size=order_size,
-            freq=freq,
-            hedge=hedge,
-            mode=mode,
-        )
-        fitness_results.append(df)
-        gc.collect()
-
-    # If we pass validation data we will process it as well
-    if close_validation_sets and open_validation_sets:
-        validate_data = zip(close_validation_sets, open_validation_sets)
-
-        for close_prices, open_prices in validate_data:
+        if model == 'LQE1':
             df = simulate_batch_from_order_func(
                 close_prices, open_prices, params,
                 burnin=burnin,
@@ -80,9 +62,57 @@ def trainParams(
                 order_size=order_size,
                 freq=freq,
                 hedge=hedge,
+                mode=mode,
             )
-            validate_results.append(df)
+            fitness_results.append(df)
             gc.collect()
+        if model == 'LQE2':
+            df = simulate_batch_from_order_func_low_param(
+                close_prices, open_prices, params,
+                burnin=burnin,
+                cash=cash,
+                commission=commission,
+                slippage=slippage,
+                order_size=order_size,
+                freq=freq,
+                hedge=hedge,
+                mode=mode,
+            )
+            fitness_results.append(df)
+            gc.collect()
+
+    # If we pass validation data we will process it as well
+    if close_validation_sets and open_validation_sets:
+        validate_data = zip(close_validation_sets, open_validation_sets)
+
+        for close_prices, open_prices in validate_data:
+            if model == 'LQE1':
+                df = simulate_batch_from_order_func(
+                    close_prices, open_prices, params,
+                    burnin=burnin,
+                    cash=cash,
+                    commission=commission,
+                    slippage=slippage,
+                    order_size=order_size,
+                    freq=freq,
+                    hedge=hedge,
+                )
+                validate_results.append(df)
+                gc.collect()
+            if model == 'LQE2':
+                df = simulate_batch_from_order_func_low_param(
+                    close_prices, open_prices, params,
+                    burnin=burnin,
+                    cash=cash,
+                    commission=commission,
+                    slippage=slippage,
+                    order_size=order_size,
+                    freq=freq,
+                    hedge=hedge,
+                    mode=mode,
+                )
+                fitness_results.append(df)
+                gc.collect()
     
     # Calculate mean results for each param across folds
     train_cv_results = pd.concat(fitness_results, axis=1)

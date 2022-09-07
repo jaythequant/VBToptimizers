@@ -33,20 +33,20 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(10, 1000, 10, dtype=int),
+        "period": np.arange(10, 1001, 1, dtype=int),
         "upper": np.arange(2.1, 5.1, 0.1, dtype=float),
         "lower": np.arange(2.1, 5.1, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.0, 2.1, 0.1, dtype=float),
-        "delta": np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten(),
-        "vt": np.arange(0.01, 2.01, 0.01, dtype=float), # Experimenting with smaller step sizes
+        "delta": np.unique(np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten()),
+        "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    fil = "btczec"
+    fil = "bchsv1inch"
     opens = get_csv_data(f"data/{fil}_hourly_opens.csv")
     closes = get_csv_data(f"data/{fil}_hourly_closes.csv")
 
-    opens, _ = train_test_split(opens, test_size=0.20, train_size=0.80, shuffle=False)
-    closes, _ = train_test_split(closes, test_size=0.20, train_size=0.80, shuffle=False)
+    opens, _ = train_test_split(opens, test_size=0.30, train_size=0.70, shuffle=False)
+    closes, _ = train_test_split(closes, test_size=0.30, train_size=0.70, shuffle=False)
 
     logging.info(f"""
     +-- Genetic Algorithm --+ +-- Model Selection --+ +-- Compute Handling -----+
@@ -65,19 +65,17 @@ if __name__ == "__main__":
             population=1500,
             rank_method="rank_space",
             elitism={0: 0.005, 25: 0.500},
-            diversity={0: 1.00, 25: 0.200},
+            diversity={0: 2.00, 25: 0.200},
             cv="sliding",
-            slippage=0.0010,
+            slippage=0.0020,
             burnin=300,
-            hedge="beta",
+            hedge="dollar",
             mode="log",
-            n_splits=4,
-            trade_const=0.210,   # Recommended a 0.225
-            pr_const=0.135,      # Recommended at 0.135
-            wr_const=1.470,      # Recommended at 1.350
-            duration_cap=1440,   # Punish trade duration >=1 day
-            order_size=0.10,
-            freq="h",
+            n_splits=3,
+            trade_const=0.260,   # Recommended a 0.225
+            sr_const=0.280,      # Recommended at 0.350
+            wr_const=1.250,      # Recommended at 1.350
+            trade_floor=60,
         )
 
     logging.info("Genetic algorithm search completed.")

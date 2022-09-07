@@ -5,7 +5,6 @@ import pandas as pd
 from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
-from .simulations.lqe_setup import *
 from .simulations._cv_orders import trainParams, testParams
 from .simulations.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
@@ -20,15 +19,15 @@ logger = logging.getLogger(__name__)
 def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
-    n_batch_size:int or None=None, max_workers:int or None=None,
+    n_batch_size:int or None=None, max_workers:int or None=None, model='LQE2',
     slippage:float=0.0005, cash:int=100_000, freq:str="m",
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
     pickle_results:bool=False, hedge="dollar", trade_const:float=1.0, cv:str="timeseries",
     mode="default", validation_set:None or float=None, ret_const:float=1.0,
-    pr_const:float=1.0, wr_const:float=1.0, profit_ratio_cap:float=4.0, min_trades:float=10.0,
-    duration_cap:int=1000, dur_const:float=0.50, total_return_min:float=0.00,
+    sr_const:float=1.0, wr_const:float=1.0, total_return_min:float=0.00, 
+    duration_cap:int=1440, dur_const:float=0.50, trade_floor:int=35
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -167,44 +166,34 @@ def geneticCV(
                 repeat(open_validate_dfs),
                 repeat(close_validate_dfs),
                 repeat(mode),
+                repeat(model),
             ):
                 results.append(result)
 
         df = pd.concat(results)
 
-        df["profit_ratio"] = np.where(df["trade_count"] <= min_trades, 1, df["profit_ratio"]) # neutralize meaningless profit ratios
-        df["profit_ratio"] = np.where(
-            df["profit_ratio"] >= profit_ratio_cap, 
-            profit_ratio_cap, 
-            df["profit_ratio"]
-        ) # normalize outlier ratios past arbitrary cutoff point
-        # Calculate fitness as function of profit ratio, weighted average winrate, trade count and mean total return
-        # adjusted by constant beta weights inputted on model initiation
-        df["trade_count"] = np.where(df["trade_count"] <= 1, 1., df["trade_count"])
+        df["sharpe_ratio"] = np.where(df["sharpe_ratio"] == np.inf, 0, df["sharpe_ratio"])
+        df["trade_count"] = np.where(df["trade_count"] == 0, 1., df["trade_count"]) # Prevents np.log error
         df["fitness"] = (
-            (pr_const * np.log(df["profit_ratio"])) + 
-            (wr_const * df["Weighted Average"]) + 
-            (trade_const * np.log(df["trade_count"]/2))) # Divided by 2 should eventually be removed
+            (sr_const * df["sharpe_ratio"]/10) +
+            (wr_const * df["Weighted Average"]) +
+            (trade_const * np.log(df["trade_count"]/2)) # Divided by 2 should eventually be removed
+        )
         df["fitness"] = np.where(
             df["total_return"] < total_return_min,
             df["fitness"] * ret_const,
             df["fitness"],
         ) # Punish negative returns
         df["fitness"] = np.where(
-            df["duration"] > duration_cap, 
-            df["fitness"] * dur_const, 
+            df["duration"] > duration_cap,
+            df["fitness"] * (dur_const/df["duration"]),
             df["fitness"]
         ) # Punish high duration trades
         df["fitness"] = np.where(
-            df["trade_count"] <= 30,
-            df["fitness"] * 0.85,
+            df["trade_count"] < trade_floor,
+            df["fitness"] * (df["trade_count"]/trade_floor),
             df["fitness"]
         ) # Punish low trade counts
-        df["fitness"] = np.where(
-            df["trade_count"] < 5,
-            0, 
-            df["fitness"],
-        ) # Eliminate meaningless trade counts
         df["fitness"] = np.where(df.fitness < 0, 0, df.fitness) # Ensure that fitness cannot be negative
         
         logging.info(f"Iteration {i} completed")
