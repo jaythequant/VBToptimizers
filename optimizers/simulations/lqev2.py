@@ -12,13 +12,13 @@ Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "
 
 @njit
 def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
-    """Numba compiled kalman filter implentation"""
-    Wt = (delta / (1 - delta)) * np.eye(2)
+    """Kalman Filter as outlined by E. Chan in Algorithmic Trading pg. 78"""
+    Vw = (delta / (1 - delta)) * np.eye(2)
 
     if np.isnan(R).any():
         R = np.ones((2,2))
     else:   
-        R = C + Wt
+        R = C + Vw
 
     F = np.asarray([X, 1.0], dtype=np.float_).reshape((1,2))
 
@@ -26,9 +26,9 @@ def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
     et = y - yhat       # Calculate error term
 
     Qt = F.dot(R).dot(F.T) + vt # We will use this as the trade signal
-    At = R.dot(F.T) / Qt
-    theta = theta + At.flatten() * et   # Update theta
-    C = R - At * F.dot(R)
+    K = R.dot(F.T) / Qt # Kalman gain
+    theta = theta + K.flatten() * et   # Update theta
+    C = R - K * F.dot(R)
     
     return R, C, theta, et, Qt
 
@@ -122,7 +122,6 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
 
         outlay = c.last_value[c.group] * params.order_size
 
-        # A crude mark-to-market calculation
         if memory.status[0] != 0 and memory.status[0] != 3:
             # Evaluate the net mark-to-market gain/loss
             marktomarket = c.last_value[c.group] - c.second_last_value[c.group]
@@ -165,7 +164,7 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
-            if pnl_pct < -0.01:
+            if pnl_pct < -16.10 * params.order_size:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 0
@@ -179,9 +178,11 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 c.call_seq_now[0] = 0
                 c.call_seq_now[1] = 1
                 memory.status[0] = 0
+                memory.mtm[0] = 0
+                memory.mtm[1] = 0
             
         elif memory.status[0] == 2:
-            if pnl_pct < -0.01:
+            if pnl_pct < -16.10 * params.order_size:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 1
@@ -195,6 +196,8 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 c.call_seq_now[0] = 1
                 c.call_seq_now[1] = 0
                 memory.status[0] = 0
+                memory.mtm[0] = 0
+                memory.mtm[1] = 0
                 
         # If stop loss triggered do not trade till next mean reversion cycle
         elif memory.status[0] == 3:

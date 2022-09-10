@@ -17,7 +17,7 @@ def init_generate_population(search_space, population=10, unique=True):
 
         # Randomly generate set of parameters and add to dictionary
         for key, param in search_space.items():
-            sample[key] = round(np.random.choice(param), 10)
+            sample[key] = round(np.random.choice(param), 21)
 
         # Append random set of sample to sample_set
         sample_set.append(sample)

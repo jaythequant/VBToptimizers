@@ -175,7 +175,7 @@ def geneticCV(
         df["sharpe_ratio"] = np.where(df["sharpe_ratio"] == np.inf, 0, df["sharpe_ratio"])
         df["trade_count"] = np.where(df["trade_count"] == 0, 1., df["trade_count"]) # Prevents np.log error
         df["fitness"] = (
-            (sr_const * df["sharpe_ratio"]/10) +
+            (sr_const * df["sharpe_ratio"]/5) +
             (wr_const * df["Weighted Average"]) +
             (trade_const * np.log(df["trade_count"]/2)) # Divided by 2 should eventually be removed
         )

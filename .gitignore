@@ -2,6 +2,6 @@ __pycache__
 .ipynb_checkpoints
 .env
 *.log
-*.ipynb
+test.ipynb
 test.py
 *.csv
