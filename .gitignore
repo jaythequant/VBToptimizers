@@ -5,3 +5,4 @@ __pycache__
 test.ipynb
 test.py
 *.csv
+.DS_Store

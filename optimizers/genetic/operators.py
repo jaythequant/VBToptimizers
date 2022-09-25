@@ -17,7 +17,7 @@ def init_generate_population(search_space, population=10, unique=True):
 
         # Randomly generate set of parameters and add to dictionary
         for key, param in search_space.items():
-            sample[key] = round(np.random.choice(param), 21)
+            sample[key] = round(np.random.choice(param), 25)
 
         # Append random set of sample to sample_set
         sample_set.append(sample)
@@ -306,6 +306,6 @@ def mutation(
                 if operator == "minus":
                     gene = genome[random_parameter] * (1 - step_size)
             # Update the genome with the mutant gene
-            genome[random_parameter] = round(gene, 10)
+            genome[random_parameter] = round(gene, 25)
     # Repeat for all genomes and genes
     return generation

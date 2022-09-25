@@ -13,7 +13,8 @@ Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "
 @njit
 def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
     """Kalman Filter as outlined by E. Chan in Algorithmic Trading pg. 78"""
-    Vw = (delta / (1 - delta)) * np.eye(2)
+    # Vw = (delta / (1 - delta)) * np.eye(2)
+    Vw = delta * np.eye(2)
 
     if np.isnan(R).any():
         R = np.ones((2,2))
@@ -122,16 +123,13 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
 
         outlay = c.last_value[c.group] * params.order_size
 
-        if memory.status[0] != 0 and memory.status[0] != 3:
-            # Evaluate the net mark-to-market gain/loss
-            marktomarket = c.last_value[c.group] - c.second_last_value[c.group]
-            if not memory.mtm[1]:
-                # last_prices = np.asarray([c.close[c.i - 1, c.from_col], c.close[c.i - 1, c.from_col + 1]])
-                # init_vals =  last_prices * size
-                # memory.mtm[1] = np.sum(np.abs(init_vals))
-                memory.mtm[1] = c.second_last_value[c.group]
-            memory.mtm[0] = memory.mtm[0] + marktomarket
-            pnl_pct = memory.mtm[0] / memory.mtm[1]
+        # if memory.status[0] != 0 and memory.status[0] != 3:
+        #     # Evaluate the net mark-to-market gain/loss
+        #     marktomarket = c.last_value[c.group] - c.second_last_value[c.group]
+        #     if not memory.mtm[1]:
+        #         memory.mtm[1] = c.second_last_value[c.group]
+        #     memory.mtm[0] = memory.mtm[0] + marktomarket
+        #     pnl_pct = memory.mtm[0] / memory.mtm[1]
 
         if memory.spread[c.i - 1] > (params.entry * memory.signal[c.i - 1]) and not memory.status[0]:
             if hedge == "dollar":
@@ -164,14 +162,14 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
-            if pnl_pct < -16.10 * params.order_size:
-                size[0] = 0
-                size[1] = 0
-                c.call_seq_now[0] = 0
-                c.call_seq_now[1] = 1
-                memory.status[0] = 3
-                memory.mtm[0] = 0
-                memory.mtm[1] = 0
+            # if pnl_pct < -0.05:
+            #     size[0] = 0
+            #     size[1] = 0
+            #     c.call_seq_now[0] = 1
+            #     c.call_seq_now[1] = 0
+            #     memory.status[0] = 3
+            #     memory.mtm[0] = 0
+            #     memory.mtm[1] = 0
             if np.abs(memory.spread[c.i - 1]) < (params.exit * memory.signal[c.i - 1]):
                 size[0] = 0
                 size[1] = 0
@@ -182,14 +180,14 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 memory.mtm[1] = 0
             
         elif memory.status[0] == 2:
-            if pnl_pct < -16.10 * params.order_size:
-                size[0] = 0
-                size[1] = 0
-                c.call_seq_now[0] = 1
-                c.call_seq_now[1] = 0
-                memory.status[0] = 3
-                memory.mtm[0] = 0
-                memory.mtm[1] = 0
+            # if pnl_pct < -0.05:
+            #     size[0] = 0
+            #     size[1] = 0
+            #     c.call_seq_now[0] = 1
+            #     c.call_seq_now[1] = 0
+            #     memory.status[0] = 3
+            #     memory.mtm[0] = 0
+            #     memory.mtm[1] = 0
             if np.abs(memory.spread[c.i - 1]) < (params.exit * memory.signal[c.i - 1]):
                 size[0] = 0
                 size[1] = 0

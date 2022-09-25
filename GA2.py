@@ -37,13 +37,13 @@ if __name__ == "__main__":
     vt_arr = np.unique(arr[arr < 1])
 
     params = {
-        "entry": np.arange(1.0, 5.1, 0.1, dtype=float),
-        "exit": np.arange(0.0, 2.6, 0.1, dtype=float),
+        "entry": np.arange(0.5, 5.1, 0.05, dtype=float),
+        "exit": np.arange(0.0, 3.1, 0.05, dtype=float),
         "delta": delta_arr, # large array of extremely small values
         "vt": vt_arr,
     }
 
-    fil = "chzwin"
+    fil = "frontgrt"
     opens = get_csv_data(f"data/{fil}_hourly_opens.csv")
     closes = get_csv_data(f"data/{fil}_hourly_closes.csv")
 
@@ -71,17 +71,17 @@ if __name__ == "__main__":
             diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0010,
-            hedge="beta",
-            mode="log",
+            hedge="dollar",
+            mode="default",
             n_splits=3,
-            trade_const=0.215,   # Recommended a 0.225
-            sr_const=1.600,      # Recommended at 0.350
-            wr_const=0.250,      # Recommended at 1.350
-            trade_floor=60,
-            freq="h",
+            trade_const=0.250,   # Recommended a 0.200
+            sr_const=1.800,      # Recommended at 1.600
+            wr_const=0.100,      # Recommended at 0.050
+            trade_floor=10,
+            freq='h',
             model='LQE2',
             burnin=800,
-            order_size=0.50,
+            order_size=0.10,
         )
 
     logging.info("Genetic algorithm search completed.")

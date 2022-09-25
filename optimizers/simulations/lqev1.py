@@ -169,7 +169,6 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 c.call_seq_now[0] = 1 # Execute short sale first
                 c.call_seq_now[1] = 0 # Use funds to purchase long side
                 memory.status[0] = 1
-                # memory.v = c.value[c.i]
                 
         # Note that x_t = c.close[c.i - 1, c.from_col]
         # and y_t = c.close[c.i - 1, c.from_col + 1]
@@ -191,14 +190,6 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 memory.status[0] = 2
 
         elif memory.status[0] == 1:
-            # if pnl_pct < -0.10:
-            #     size[0] = 0
-            #     size[1] = 0
-            #     c.call_seq_now[0] = 1
-            #     c.call_seq_now[1] = 0
-            #     memory.status[0] = 3
-            #     memory.mtm[0] = 0
-            #     memory.mtm[1] = 0
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
                 size[0] = 0
                 size[1] = 0
@@ -209,14 +200,6 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 memory.mtm[1] = 0
             
         elif memory.status[0] == 2:
-            # if pnl_pct < -0.10:
-            #     size[0] = 0
-            #     size[1] = 0
-            #     c.call_seq_now[0] = 1
-            #     c.call_seq_now[1] = 0
-            #     memory.status[0] = 3
-            #     memory.mtm[0] = 0
-            #     memory.mtm[1] = 0
             if np.abs(memory.zscore[c.i - 1]) < params.exit:
                 size[0] = 0
                 size[1] = 0
@@ -227,9 +210,9 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 memory.mtm[1] = 0
 
         # If a trade stops out then temporarily stop looking for trades till mean reversion occurs
-        elif memory.status[0] == 3:
-            if np.abs(memory.zscore[c.i - 1]) < params.exit: 
-                memory.status[0] = 0
+        # elif memory.status[0] == 3:
+        #     if np.abs(memory.zscore[c.i - 1]) < params.exit: 
+        #         memory.status[0] = 0
             
         else:
             size[0] = np.nan

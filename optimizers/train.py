@@ -20,7 +20,7 @@ def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
     n_batch_size:int or None=None, max_workers:int or None=None, model='LQE2',
-    slippage:float=0.0005, cash:int=100_000, freq:str="m",
+    slippage:float=0.0005, cash:int=100_000, freq:str="h",
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,

@@ -99,25 +99,12 @@ def trainParams(
                 )
                 validate_results.append(df)
                 gc.collect()
-            if model == 'LQE2':
-                df = simulate_batch_from_order_func_low_param(
-                    close_prices, open_prices, params,
-                    burnin=burnin,
-                    cash=cash,
-                    commission=commission,
-                    slippage=slippage,
-                    order_size=order_size,
-                    freq=freq,
-                    hedge=hedge,
-                    mode=mode,
-                )
-                fitness_results.append(df)
-                gc.collect()
     
     # Calculate mean results for each param across folds
     train_cv_results = pd.concat(fitness_results, axis=1)
     weighted_wr = _weighted_average(train_cv_results)
     mean_results = train_cv_results.groupby(by=train_cv_results.columns, axis=1).mean()
+    # median_results = train_cv_results.groupby(by=train_cv_results.columns, axis=1).median()
 
     if validate_results:
         validate_cv_results = pd.concat(validate_results, axis=1)
