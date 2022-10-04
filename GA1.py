@@ -1,12 +1,21 @@
 import logging
+import os
 import configparser
 import numpy as np
+from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
 from optimizers.train import geneticCV
-from optimizers.utils._utils import get_csv_data
+from optimizers.pipes.pipe import SQLPipe
+
+load_dotenv()
+
+USER = os.getenv('psql_username')
+PASS = os.getenv('psql_password')
+DATABASE = 'crypto'
+SCHEMA = 'kucoin'
 
 config = configparser.ConfigParser()
-config.read("conf.ini")
+config.read("geneticconf.ini")
 genetic = dict(config["genetic"])
 model = dict(config["backtest"])
 compute = dict(config["compute"])
@@ -26,6 +35,8 @@ logging.basicConfig(
     ]
 )
 
+pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS)
+
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
@@ -41,23 +52,17 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    fil = "btczec"
+    assets = ['BNB-USDT', 'API3-USDT']
     slicer = 1000 # Slice off first few months of trading to reduce early volatility
-    opens = get_csv_data(f"data/{fil}_hourly_opens.csv")[slicer:]
-    closes = get_csv_data(f"data/{fil}_hourly_closes.csv")[slicer:]
 
-    opens, _ = train_test_split(opens, test_size=0.30, train_size=0.70, shuffle=False)
-    closes, _ = train_test_split(closes, test_size=0.30, train_size=0.70, shuffle=False)
+    df = pipe.query_pairs_trading_backtest(assets)
+    closes = df.xs('close', level=1, axis=1)[slicer:]
+    opens = df.xs('open', level=1, axis=1)[slicer:]
+    assert closes.shape[0] > 8640, 'Less than 1 year of backtesting data present'
+    assert closes.shape == opens.shape, 'Open and close shape does not match'
 
-    logging.info(f"""
-    +-- Genetic Algorithm --+ +-- Model Selection --+ +-- Compute Handling -----+
-    |  * Population= 1000   | |  * Population= 1000 | |  * Max Proccesses= 1000 |
-    |  * Iterations= 50     | |  * Population= 1000 | |  * Population= 1000     |
-    |  * Mode= cummlog      | |  * Population= 1000 | |  * Population= 1000     |
-    |  * Hedge= beta        | |  * Population= 1000 | |  * Population= 1000     |
-    |  * CV= sliding        | |  * Population= 1000 | |  * Population= 1000     |
-    +-----------------------+ +---------------------+ +-------------------------+
-    """)
+    opens, _ = train_test_split(opens, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
+    closes, _ = train_test_split(closes, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
 
     df = geneticCV(
             opens, closes, params,
@@ -70,11 +75,11 @@ if __name__ == "__main__":
             cv="sliding",
             slippage=0.0020,
             burnin=500,
-            mode="default",
+            mode="log",
             hedge="beta",
             n_splits=3,
-            trade_const=0.250,   # Recommended a 0.225
-            sr_const=1.280,      # Recommended at 0.350
+            trade_const=0.235,   # Recommended a 0.225
+            sr_const=1.230,      # Recommended at 0.350
             wr_const=1.000,      # Recommended at 1.350
             trade_floor=30,
             model='LQE1',
