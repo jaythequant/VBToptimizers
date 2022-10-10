@@ -52,14 +52,14 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['BNB-USDT', 'API3-USDT']
-    slicer = 1000 # Slice off first few months of trading to reduce early volatility
+    assets = ['FIL-USDT', 'CAKE-USDT']
+    slicer = 0 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)
     closes = df.xs('close', level=1, axis=1)[slicer:]
     opens = df.xs('open', level=1, axis=1)[slicer:]
     assert closes.shape[0] > 8640, 'Less than 1 year of backtesting data present'
-    assert closes.shape == opens.shape, 'Open and close shape does not match'
+    assert closes.index.equals(opens.index), 'Open and close indices do not match'
 
     opens, _ = train_test_split(opens, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
     closes, _ = train_test_split(closes, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
@@ -75,13 +75,13 @@ if __name__ == "__main__":
             cv="sliding",
             slippage=0.0020,
             burnin=500,
-            mode="log",
+            mode="default",
             hedge="beta",
             n_splits=3,
-            trade_const=0.235,   # Recommended a 0.225
+            trade_const=0.245,   # Recommended a 0.225
             sr_const=1.230,      # Recommended at 0.350
-            wr_const=1.000,      # Recommended at 1.350
-            trade_floor=30,
+            wr_const=0.400,      # Recommended at 1.350
+            trade_floor=40,
             model='LQE1',
             freq="h"
         )
