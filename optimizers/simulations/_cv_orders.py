@@ -10,7 +10,7 @@ def trainParams(
     close_train_sets:list, open_train_sets:list, params:dict, commission:float=0.0008, 
     slippage:float=0.0010, burnin:int=500, cash:int=100_000, order_size:float=0.10, 
     freq:None or str=None, hedge:str="dollar", close_validation_sets:None or list=None, 
-    open_validation_sets:None or list=None, mode:str="default", model='LQE2',
+    open_validation_sets:None or list=None, mode:str="default", model='LQE2', rf=0.05,
 ) -> pd.DataFrame:
     """Train param batch against cross-validated training (and validation) data.
 
@@ -63,6 +63,7 @@ def trainParams(
                 freq=freq,
                 hedge=hedge,
                 mode=mode,
+                rf=rf
             )
             fitness_results.append(df)
             gc.collect()
@@ -77,6 +78,7 @@ def trainParams(
                 freq=freq,
                 hedge=hedge,
                 mode=mode,
+                rf=rf
             )
             fitness_results.append(df)
             gc.collect()
@@ -96,6 +98,7 @@ def trainParams(
                     order_size=order_size,
                     freq=freq,
                     hedge=hedge,
+                    rf=rf
                 )
                 validate_results.append(df)
                 gc.collect()

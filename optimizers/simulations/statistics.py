@@ -165,6 +165,53 @@ def number_of_trades(pf) -> pd.Series:
 
     return trades_ser
 
+def custom_sharpe_ratio(pf, burnin, rf=0.05):
+    """Calculate sharpe ratio on gross outlay for net long-short trades"""
+    ser = {}
+    
+    trades = pf.trades.records_readable
+    trades["Column"] = trades["Column"].str[:-1]
+    g = trades.groupby("Column")
+
+    for idx, gr in g:
+        pnl = (gr.groupby('Entry Timestamp').sum().PnL.resample('D').sum())
+        val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        res = pd.concat([pnl, val], axis=1, keys=['pnl', 'val'])
+        res = res.fillna(0)
+        res['ret'] = res.pnl / res.val
+        Rf = (1 + rf) ** (1/365) - 1 # Daily risk free rate
+        Rp = res.ret.mean() # Daily portfolio return
+        STDp = res.ret.std() # Daily standard deviation of return
+        sharpe = ((Rp - Rf) / STDp) * np.sqrt(365) # Annualized sharpe
+        ser[idx] = sharpe
+
+    ser = pd.Series(ser, name="sharpe_ratio")
+
+    return ser
+
+def custom_sortino_ratio(pf, burnin, rf=0.05):
+    """Calculate sortino ratio on gross outlay for net long-short trades"""
+    ser = {}
+    
+    trades = pf.trades.records_readable
+    trades["Column"] = trades["Column"].str[:-1]
+    g = trades.groupby("Column")
+
+    for idx, gr in g:
+        pnl = (gr.groupby('Entry Timestamp').sum().PnL.resample('D').sum())
+        val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        res = pd.concat([pnl, val], axis=1, keys=['pnl', 'val'])
+        res = res.fillna(0)
+        res['ret'] = res.pnl / res.val
+        Rf = (1 + rf) ** (1/365) - 1 # Daily risk free rate
+        Rp = res.ret.mean() # Daily portfolio return
+        STDp = res[res['ret'] < 0].ret.std() # Daily standard deviation of return
+        sortino = ((Rp - Rf) / STDp) * np.sqrt(365) # Annualized sharpe
+        ser[idx] = sortino
+
+    ser = pd.Series(ser, name="sortino_ratio")
+
+    return ser
 
 def _weighted_average(df:pd.DataFrame) -> pd.Series:
     """Calculate the weighted-average win rate across folds"""

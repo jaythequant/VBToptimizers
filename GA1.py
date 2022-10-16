@@ -52,7 +52,7 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['FIL-USDT', 'CAKE-USDT']
+    assets = ['CAKE-USDT', 'AAVE-USDT']
     slicer = 0 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)
@@ -74,16 +74,16 @@ if __name__ == "__main__":
             diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0020,
-            burnin=500,
-            mode="default",
+            burnin=800,
+            mode="log",
             hedge="beta",
             n_splits=3,
-            trade_const=0.245,   # Recommended a 0.225
-            sr_const=1.230,      # Recommended at 0.350
-            wr_const=0.400,      # Recommended at 1.350
+            trade_const=0.235,   # Recommended a 0.225
+            sr_const=1.100,      # Recommended at 0.350
+            wr_const=0.300,      # Recommended at 1.350
             trade_floor=40,
             model='LQE1',
-            freq="h"
+            freq="h",
         )
 
     logging.info("Genetic algorithm search completed.")

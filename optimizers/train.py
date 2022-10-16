@@ -20,7 +20,7 @@ def geneticCV(
     opens:pd.DataFrame, closes:pd.DataFrame, params:dict, n_iter:int=100, population:int=100,
     cross_rate:float=1.00, mutation_rate:float=0.05, n_splits:int=5, order_size:float=0.10,
     n_batch_size:int or None=None, max_workers:int or None=None, model='LQE2',
-    slippage:float=0.0005, cash:int=100_000, freq:str="h",
+    slippage:float=0.0005, cash:int=100_000, freq:str="h", rf:int=0.00,
     rank_method="default", elitism:float or dict=None, mutation_style="random",
     mutation_steps:float or dict=0.10, commission:float=0.0008, 
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
@@ -167,12 +167,14 @@ def geneticCV(
                 repeat(close_validate_dfs),
                 repeat(mode),
                 repeat(model),
+                repeat(rf),
             ):
                 results.append(result)
 
         df = pd.concat(results)
 
         df["sharpe_ratio"] = np.where(df["sharpe_ratio"] == np.inf, 0, df["sharpe_ratio"])
+        df["sharpe_ratio"] = np.where(df["sharpe_ratio"] > 20, 0, df["sharpe_ratio"]) # Eliminate statistical impossibilities
         df["trade_count"] = np.where(df["trade_count"] == 0, 1., df["trade_count"]) # Prevents np.log error
         df["fitness"] = (
             (sr_const * df["sharpe_ratio"]/5) +

@@ -155,17 +155,30 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 if hedge == "dollar":
                     size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
                     size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
-                if hedge == "beta":
+                elif hedge == "beta":
                     # In the event that our beta hedge is greater than 1, we would 
                     # be opening positions much larger than our target percentage size.
                     # In response, open identically profiled positions, but use beta
                     # to scale our contra-asset down by moving to the numerator of the Y asset
-                    if theta[0] < 1:
+                    if np.abs(theta[0]) < 1:
                         size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
                         size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
-                    if theta[0] > 1:
+                    elif np.abs(theta[0]) >= 1:
                         size[0] = outlay / c.close[c.i - 1, c.from_col]
                         size[1] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
+                elif hedge == "delta":
+                    # Delta-based hedge strategy. We assume that delta shares y == beta * delta shares x
+                    delta_y = outlay / c.close[c.i - 1, c.from_col + 1] # n *shares* of y
+                    size[0] = delta_y * theta[0] # beta n *shares* of x
+                    size[1] = -delta_y
+                elif hedge == "reversebeta":
+                    # Experimental strategy where we reverse the dollar-based beta hedge
+                    if np.abs(theta[0]) < 1:
+                        size[0] = outlay / c.close[c.i - 1, c.from_col]
+                        size[1] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
+                    elif np.abs(theta[0]) >= 1:
+                        size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
+                        size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
                 c.call_seq_now[0] = 1 # Execute short sale first
                 c.call_seq_now[1] = 0 # Use funds to purchase long side
                 memory.status[0] = 1
@@ -178,15 +191,27 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
                 if hedge == "dollar":
                     size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
                     size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
-                if hedge == "beta":
-                    if theta[0] < 1:
+                elif hedge == "beta":
+                    if np.abs(theta[0]) < 1:
                         size[0] = -(outlay * theta[0]) / c.close[c.i - 1, c.from_col]
                         size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
-                    if theta[0] > 1:
+                    elif np.abs(theta[0]) >= 1:
                         size[0] = -outlay / c.close[c.i - 1, c.from_col]
                         size[1] = (outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
+                elif hedge == "delta":
+                    delta_y = outlay / c.close[c.i - 1, c.from_col + 1] # n *shares* of y
+                    size[0] = -(delta_y * theta[0]) # beta n *shares* of x
+                    size[1] = delta_y
+                elif hedge == "reversebeta":
+                    # Experimental strategy where we reverse the dollar-based beta hedge
+                    if np.abs(theta[0]) < 1:
+                        size[0] = -outlay / c.close[c.i - 1, c.from_col]
+                        size[1] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col + 1]
+                    elif np.abs(theta[0]) >= 1:
+                        size[0] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col]
+                        size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
                 c.call_seq_now[0] = 0  # execute the second order first to release funds early
-                c.call_seq_now[1] = 1  
+                c.call_seq_now[1] = 1
                 memory.status[0] = 2
 
         elif memory.status[0] == 1:

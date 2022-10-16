@@ -2,13 +2,16 @@ import vectorbt as vbt
 import pandas as pd
 import gc
 
-from .lqev1 import *
-from .lqev2 import (
+from .strategies.lqev1 import *
+from .strategies.lqev2 import (
     order_func_nb as order_func_nb2, 
     pre_group_func_nb as pre_group_func_nb2,
     pre_segment_func_nb as pre_segment_func_nb2,
 )
-from .statistics import calculate_profit_ratio, extract_duration, extract_wr, number_of_trades
+from .statistics import (
+    calculate_profit_ratio, extract_duration, extract_wr, 
+    number_of_trades, custom_sharpe_ratio, custom_sortino_ratio,
+)
 
 
 def simulate_from_order_func(
@@ -177,6 +180,7 @@ def simulate_batch_from_order_func(
     commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
     freq:None or str=None, interval:str="minutes", hedge:str="dollar",
+    rf=0.05,
 ):
     """Backtest batched param sets [Param sets must be pre-defined]"""
     # Generate multiIndex columns
@@ -211,25 +215,16 @@ def simulate_batch_from_order_func(
         group_by=param_columns.names,
         freq=freq,
     )
-
-    # Append results of each param comb to CSV file
-    total_return = pf.total_return()    # Extract total return for each param
-    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
-    dur = extract_duration(pf, interval) # Extract median trade duration in hours
-    trades = number_of_trades(pf)
-    profit_ratio = calculate_profit_ratio(pf)
-    sharpe = pf.sharpe_ratio()
-    # Append params results to CSV for later analysis
-    res = pd.concat([total_return, wr, dur, trades, profit_ratio, sharpe], axis=1)
+    res = _analyze_results(pf, interval, burnin, rf)
     gc.collect()
     return res
-
 
 def simulate_batch_from_order_func_low_param(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
     freq:None or str=None, interval:str="minutes", hedge:str="dollar",
+    rf=0.05,
 ):
     """Backtest batched param sets [Param sets must be pre-defined]"""
     # Generate multiIndex columns
@@ -263,15 +258,7 @@ def simulate_batch_from_order_func_low_param(
         freq=freq,
     )
 
-    # Append results of each param comb to CSV file
-    total_return = pf.total_return()    # Extract total return for each param
-    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
-    dur = extract_duration(pf, interval) # Extract median trade duration in hours
-    trades = number_of_trades(pf)
-    profit_ratio = calculate_profit_ratio(pf)
-    sharpe = pf.sharpe_ratio()
-    # Append params results to CSV for later analysis
-    res = pd.concat([total_return, wr, dur, trades, profit_ratio, sharpe], axis=1)
+    res = _analyze_results(pf, interval, rf)
     gc.collect()
     return res
 
@@ -304,4 +291,17 @@ def low_param_simulate_from_order_func(
         freq=freq
     )
 
-
+def _analyze_results(pf, interval, burnin, rf):
+    """Analyze output portfolio object for BATCH results"""
+    total_return = pf.total_return()    # Extract total return for each param
+    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
+    dur = extract_duration(pf, interval) # Extract median trade duration in `interval`
+    trades = number_of_trades(pf)
+    profit_ratio = calculate_profit_ratio(pf)
+    sharpe = custom_sharpe_ratio(pf, burnin, rf)
+    sortino = custom_sortino_ratio(pf, burnin, rf)
+    res = pd.concat(
+        [total_return, wr, dur, trades, profit_ratio, sharpe, sortino], 
+        axis=1,
+    )
+    return res
