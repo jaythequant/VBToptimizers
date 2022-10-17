@@ -1,36 +1,12 @@
 import numpy as np
 from numba import njit
 from collections import namedtuple
-from vectorbt.portfolio import nb as portfolio_nb
 from vectorbt.base.reshape_fns import flex_select_auto_nb
-from vectorbt.portfolio.enums import SizeType
+from .components.predictors import KF
 
 Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status', 'mtm'))       
 Params = namedtuple("Params", ('period', 'upper', 'lower', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
 Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "logr_y", "log_x", "log_y"))
-
-
-@njit
-def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
-    """Numba compiled kalman filter implentation"""
-    Wt = (delta / (1 - delta)) * np.eye(2)
-
-    if np.isnan(R).any():
-        R = np.ones((2,2))
-    else:   
-        R = C + Wt
-
-    F = np.asarray([X, 1.0], dtype=np.float_).reshape((1,2))
-
-    yhat = F.dot(theta) # Prediction
-    et = y - yhat       # Calculate error term
-
-    Qt = F.dot(R).dot(F.T) + vt
-    At = R.dot(F.T) / Qt
-    theta = theta + At.flatten() * et   # Update theta
-    C = R - At * F.dot(R)
-    
-    return R, C, theta, et
 
 
 @njit
@@ -112,7 +88,7 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             X = transformations.log_x[c.i]
             y = transformations.log_y[c.i]
 
-        Rt, Ct, theta, e = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
+        Rt, Ct, theta, e, _ = KF(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
         memory.spread[c.i] = e[0]
         memory.theta[0:2] = theta
@@ -136,16 +112,16 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
         outlay = c.last_value[c.group] * params.order_size
 
         # A crude mark-to-market calculation
-        if memory.status[0] != 0 and memory.status[0] != 3:
-            # Evaluate the net mark-to-market gain/loss
-            marktomarket = c.last_value[c.group] - c.second_last_value[c.group]
-            if not memory.mtm[1]:
-                last_prices = np.asarray([c.close[c.i - 1, c.from_col], c.close[c.i - 1, c.from_col + 1]])
-                init_vals =  last_prices * size
-                memory.mtm[1] = np.sum(np.abs(init_vals))
-                # memory.mtm[1] = c.second_last_value[c.group]
-            memory.mtm[0] = memory.mtm[0] + marktomarket
-            pnl_pct = memory.mtm[0] / memory.mtm[1]
+        # if memory.status[0] != 0 and memory.status[0] != 3:
+        #     # Evaluate the net mark-to-market gain/loss
+        #     marktomarket = c.last_value[c.group] - c.second_last_value[c.group]
+        #     if not memory.mtm[1]:
+        #         last_prices = np.asarray([c.close[c.i - 1, c.from_col], c.close[c.i - 1, c.from_col + 1]])
+        #         init_vals =  last_prices * size
+        #         memory.mtm[1] = np.sum(np.abs(init_vals))
+        #         # memory.mtm[1] = c.second_last_value[c.group]
+        #     memory.mtm[0] = memory.mtm[0] + marktomarket
+        #     pnl_pct = memory.mtm[0] / memory.mtm[1]
 
         # Check if any bound is crossed
         # Since zscore is calculated using close, use zscore of the previous step
@@ -244,18 +220,3 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             size[1] = np.nan
         
     return (size,)
-
-@njit
-def order_func_nb(c, size, price, commperc, slippage):
-    """Place an order (= element within group and row)."""
-    # Get column index within group (if group starts at column 58 and current column is 59, 
-    # the column within group is 1, which can be used to get size)
-    group_col = c.col - c.from_col
-    return portfolio_nb.order_nb(
-        size=size[group_col], 
-        price=price[c.i, c.col],
-        size_type=SizeType.TargetAmount,
-        fees=commperc,
-        slippage=slippage,
-        lock_cash=False,
-    )

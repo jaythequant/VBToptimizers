@@ -1,37 +1,12 @@
 import numpy as np
 from numba import njit
 from collections import namedtuple
-from vectorbt.portfolio import nb as portfolio_nb
 from vectorbt.base.reshape_fns import flex_select_auto_nb
-from vectorbt.portfolio.enums import SizeType
+from .components.predictors import KF
 
 Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'signal', 'status', 'mtm'))
 Params = namedtuple("Params", ('entry', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
 Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "logr_y", "log_x", "log_y"))
-
-
-@njit
-def kf_nb(X, y, R, C, theta, delta=1e-5, vt=1):
-    """Kalman Filter as outlined by E. Chan in Algorithmic Trading pg. 78"""
-    # Vw = (delta / (1 - delta)) * np.eye(2)
-    Vw = delta * np.eye(2)
-
-    if np.isnan(R).any():
-        R = np.ones((2,2))
-    else:   
-        R = C + Vw
-
-    F = np.asarray([X, 1.0], dtype=np.float_).reshape((1,2))
-
-    yhat = F.dot(theta) # Prediction
-    et = y - yhat       # Calculate error term
-
-    Qt = F.dot(R).dot(F.T) + vt # We will use this as the trade signal
-    K = R.dot(F.T) / Qt # Kalman gain
-    theta = theta + K.flatten() * et   # Update theta
-    C = R - K * F.dot(R)
-    
-    return R, C, theta, et, Qt
 
 
 @njit
@@ -104,7 +79,7 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             X = transformations.log_x[c.i]
             y = transformations.log_y[c.i]
 
-        Rt, Ct, theta, e, Qt = kf_nb(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
+        Rt, Ct, theta, e, Qt = KF(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 
         memory.spread[c.i] = e[0]
         memory.signal[c.i] = np.sqrt(Qt).flatten()[0] # Calculate STD of observation
@@ -207,18 +182,3 @@ def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
             size[1] = np.nan
         
     return (size,)
-
-@njit
-def order_func_nb(c, size, price, commperc, slippage):
-    """Place an order (= element within group and row)."""
-    # Get column index within group (if group starts at column 58 and current column is 59, 
-    # the column within group is 1, which can be used to get size)
-    group_col = c.col - c.from_col
-    return portfolio_nb.order_nb(
-        size=size[group_col], 
-        price=price[c.i, c.col],
-        size_type=SizeType.TargetAmount,
-        fees=commperc,
-        slippage=slippage,
-        lock_cash=False,
-    )

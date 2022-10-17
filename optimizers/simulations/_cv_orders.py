@@ -42,10 +42,10 @@ def trainParams(
 
     See Also
     --------
-        `optimizers.simulations._order.simulate_batch_from_order_func`
-        `optimizers.simulations.statistics._weighted_average`
-        `optimizers.simulations.statistics._calculate_mse`
-        `vbt.Portfolio`
+    * `optimizers.simulations._order.simulate_batch_from_order_func`
+    * `optimizers.simulations.statistics._weighted_average`
+    * `optimizers.simulations.statistics._calculate_mse`
+    * `vbt.Portfolio`
     """
     fitness_results = []
     validate_results = []

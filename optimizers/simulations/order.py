@@ -1,10 +1,10 @@
+import gc
 import vectorbt as vbt
 import pandas as pd
-import gc
+import numpy as np
 
-from .strategies.lqev1 import *
+from .strategies.lqev1 import pre_group_func_nb, pre_segment_func_nb
 from .strategies.lqev2 import (
-    order_func_nb as order_func_nb2, 
     pre_group_func_nb as pre_group_func_nb2,
     pre_segment_func_nb as pre_segment_func_nb2,
 )
@@ -12,6 +12,8 @@ from .statistics import (
     calculate_profit_ratio, extract_duration, extract_wr, 
     number_of_trades, custom_sharpe_ratio, custom_sortino_ratio,
 )
+from .strategies.rollingou import ou_pre_group_func_nb, ou_pre_segment_func_nb
+from .strategies.components.orders import order_func_nb
 
 
 def simulate_from_order_func(
@@ -238,7 +240,7 @@ def simulate_batch_from_order_func_low_param(
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
         vbt_close_price_mult,
-        order_func_nb2,
+        order_func_nb,
         vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
         pre_group_func_nb=pre_group_func_nb2,
         pre_group_args=(
@@ -271,7 +273,7 @@ def low_param_simulate_from_order_func(
 ):
     return vbt.Portfolio.from_order_func(
         close_data,
-        order_func_nb2, 
+        order_func_nb, 
         open_data.values, commission, slippage,  # *args for order_func_nb
         pre_group_func_nb=pre_group_func_nb2, 
         pre_group_args=(
@@ -305,3 +307,84 @@ def _analyze_results(pf, interval, burnin, rf):
         axis=1,
     )
     return res
+
+def simulate_rolling_ou_model(
+    close_data:pd.DataFrame, open_data:pd.DataFrame, period:int=60, 
+    upper_entry:float=1.25, upper_exit:float=0.75, lower_entry:float=-1.25, 
+    lower_exit:float=-0.50, cash:int=100_000, slippage:float=0.0010, 
+    order_size:float=0.10, freq:str='60T', commission:float=0.0008, 
+):
+    """Leverage Rolling OLS to estimate Ornstein-Uhlenbeck process. Trade based on 
+    standardized spread measures. This strategy is as outlined in Avallaneda et al.
+    (2008)."""
+    if lower_entry > 0:
+        lower_entry = -lower_entry
+    if lower_exit > 0:
+        lower_exit = -lower_exit
+
+    return vbt.Portfolio.from_order_func(
+        close_data,
+        order_func_nb, 
+        open_data.values, commission, slippage,  # *args for order_func_nb
+        pre_group_func_nb=ou_pre_group_func_nb, 
+        pre_group_args=(
+            period, 
+            upper_entry, 
+            upper_exit,
+            lower_entry, 
+            lower_exit, 
+            order_size,
+        ),
+        pre_segment_func_nb=ou_pre_segment_func_nb, 
+        pre_segment_args=(),
+        fill_pos_record=False,  # a bit faster
+        init_cash=cash,
+        cash_sharing=True, 
+        group_by=True,
+        freq=freq,
+    )
+
+def simulate_mult_rolling_ou_model(
+    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    commission:float=0.0008, slippage:float=0.0005, cash:int=100_000, 
+    order_size:float=0.10, freq:str="h",
+):
+    """Simultaneously backtest large set of parameter combinations"""
+    # Generate multiIndex columns
+    param_product = vbt.utils.params.create_param_product(list(params.values()))
+
+    for idx, prod in enumerate(param_product):   # vbt create_param_product creates rounding errors
+        prod = [round(num, 11) for num in prod]  # In response, we clean up the numbers
+        param_product[idx] = prod                # Then reconstruct the param_product var
+
+    param_tuples = list(zip(*param_product))
+    param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
+
+    # We need two price columns per param combination
+    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+
+    # Simulate the portfolio and return portfolio object
+    pf = vbt.Portfolio.from_order_func(
+        vbt_close_price_mult,
+        order_func_nb, 
+        vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
+        pre_group_func_nb=ou_pre_group_func_nb,
+        pre_group_args=(
+            np.array(param_product[0]),
+            np.array(param_product[1]),
+            np.array(param_product[2]),
+            np.array(param_product[3]),
+            np.array(param_product[4]),
+            order_size,
+        ),
+        pre_segment_func_nb=ou_pre_segment_func_nb,
+        pre_segment_args=(),
+        fill_pos_record=False,
+        init_cash=cash,
+        cash_sharing=True, 
+        group_by=param_columns.names,
+        freq=freq,
+    )
+    return pf
+
