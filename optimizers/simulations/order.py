@@ -3,25 +3,27 @@ import vectorbt as vbt
 import pandas as pd
 import numpy as np
 
-from .strategies.lqev1 import pre_group_func_nb, pre_segment_func_nb
-from .strategies.lqev2 import (
-    pre_group_func_nb as pre_group_func_nb2,
-    pre_segment_func_nb as pre_segment_func_nb2,
-)
-from .statistics import (
+from .strategies.lqe import lqe_pre_group_func_nb, lqe_pre_segment_func_nb
+from .strategies.lqev2 import pre_group_func_nb, pre_segment_func_nb
+from .strategies.rollingols import ols_pre_group_func_nb, ols_pre_segment_func_nb
+from .strategies.components.statistics import (
     calculate_profit_ratio, extract_duration, extract_wr, 
     number_of_trades, custom_sharpe_ratio, custom_sortino_ratio,
 )
-from .strategies.rollingou import ou_pre_group_func_nb, ou_pre_segment_func_nb
 from .strategies.components.orders import order_func_nb
 
 
-def simulate_from_order_func(
+############################################################################
+##                Linear Quadratic Estimator Models                       ##
+############################################################################
+
+
+def simulate_lqe_model(
     close_data:pd.DataFrame, open_data:pd.DataFrame, period:float, upper:float,
     lower:float, exit:float, burnin:int=500, delta:float=1e-5, vt:float=1.0, 
-    mode:str="default", cash:int=100_000, commission:float=0.0008, 
+    transformation:str=None, cash:int=100_000, commission:float=0.0008, 
     slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
-    hedge:str="dollar",
+    hedge:str="beta", standard_score='zscore',
 ):
     """Highly configurable pair trade backtest environment built on vectorBT
 
@@ -69,10 +71,10 @@ def simulate_from_order_func(
         The second of the two parameters required for the Kalman filter. Like `delta`, 
         `vt` must be found through strategy optimization despite a default value being 
         given. `vt` is even more important than `delta` to optimize.
-    mode : str, optional
+    transformation : str, optional
         This strategy may be run using several price transformations or no price 
         transformation. By default, the strategy is run on raw asset prices. If 
-        `mode=cummlog`, Kalman filter estimates will be made by regressing cummulative 
+        `transformation=cummlog`, Kalman filter estimates will be made by regressing cummulative 
         logarithmic returns on each other.
     cash : int, optional
         Starting cash for the portfolio object in vectorBT. See docs for `vbt.Portfolio` 
@@ -109,7 +111,7 @@ def simulate_from_order_func(
         close_data,
         order_func_nb, 
         open_data.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=pre_group_func_nb, 
+        pre_group_func_nb=lqe_pre_group_func_nb, 
         pre_group_args=(
             period, 
             upper, 
@@ -120,8 +122,8 @@ def simulate_from_order_func(
             order_size, 
             burnin,
         ),
-        pre_segment_func_nb=pre_segment_func_nb, 
-        pre_segment_args=(mode, hedge,),
+        pre_segment_func_nb=lqe_pre_segment_func_nb, 
+        pre_segment_args=(transformation, hedge, standard_score),
         fill_pos_record=False,  # a bit faster
         init_cash=cash,
         cash_sharing=True, 
@@ -130,10 +132,11 @@ def simulate_from_order_func(
     )
 
 
-def simulate_mult_from_order_func(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, commission:float=0.0008, 
-    slippage:float=0.0005, mode:str="default", cash:int=100_000, order_size:float=0.10, 
-    burnin:int=500, freq:str="h", hedge:str="dollar",
+def simulate_mult_lqe_model(
+    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict,
+    commission:float=0.0008, slippage:float=0.0005, transformation:str=None,
+    cash:int=100_000, order_size:float=0.10, burnin:int=500, freq:str="h",
+    hedge:str="beta", standard_score='zscore',
 ):
     """Simultaneously backtest large set of parameter combinations"""
     # Generate multiIndex columns
@@ -155,7 +158,7 @@ def simulate_mult_from_order_func(
         vbt_close_price_mult,
         order_func_nb, 
         vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=pre_group_func_nb,
+        pre_group_func_nb=lqe_pre_group_func_nb,
         pre_group_args=(
             np.array(param_product[0]),
             np.array(param_product[1]),
@@ -166,8 +169,8 @@ def simulate_mult_from_order_func(
             order_size,
             burnin,
         ),
-        pre_segment_func_nb=pre_segment_func_nb,
-        pre_segment_args=(mode, hedge,),
+        pre_segment_func_nb=lqe_pre_segment_func_nb,
+        pre_segment_args=(transformation, hedge, standard_score),
         fill_pos_record=False,
         init_cash=cash,
         cash_sharing=True, 
@@ -177,12 +180,12 @@ def simulate_mult_from_order_func(
     return pf
 
 
-def simulate_batch_from_order_func(
+def simulate_batch_lqe_model(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
-    commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
+    commission:float=0.0008, slippage:float=0.0005, transformation:str=None, 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
-    freq:None or str=None, interval:str="minutes", hedge:str="dollar",
-    rf=0.05,
+    freq:None or str=None, interval:str="minutes", hedge:str="beta",
+    rf=0.05, standard_score='zscore'
 ):
     """Backtest batched param sets [Param sets must be pre-defined]"""
     # Generate multiIndex columns
@@ -198,7 +201,7 @@ def simulate_batch_from_order_func(
         vbt_close_price_mult,
         order_func_nb, 
         vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=pre_group_func_nb,
+        pre_group_func_nb=lqe_pre_group_func_nb,
         pre_group_args=(
             np.array(params["period"]),
             np.array(params["upper"]), 
@@ -209,8 +212,8 @@ def simulate_batch_from_order_func(
             order_size,
             burnin,
         ),
-        pre_segment_func_nb=pre_segment_func_nb,
-        pre_segment_args=(mode, hedge,),
+        pre_segment_func_nb=lqe_pre_segment_func_nb,
+        pre_segment_args=(transformation, hedge, standard_score),
         fill_pos_record=False,
         init_cash=cash,
         cash_sharing=True, 
@@ -223,7 +226,7 @@ def simulate_batch_from_order_func(
 
 def simulate_batch_from_order_func_low_param(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
-    commission:float=0.0008, slippage:float=0.0005, mode:str="default", 
+    commission:float=0.0008, slippage:float=0.0005, transformation:str="default", 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
     freq:None or str=None, interval:str="minutes", hedge:str="dollar",
     rf=0.05,
@@ -242,7 +245,7 @@ def simulate_batch_from_order_func_low_param(
         vbt_close_price_mult,
         order_func_nb,
         vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=pre_group_func_nb2,
+        pre_group_func_nb=pre_group_func_nb,
         pre_group_args=(
             np.array(params["entry"]),
             np.array(params["exit"]),
@@ -251,8 +254,8 @@ def simulate_batch_from_order_func_low_param(
             order_size,
             burnin,
         ),
-        pre_segment_func_nb=pre_segment_func_nb2,
-        pre_segment_args=(mode, hedge,),
+        pre_segment_func_nb=pre_segment_func_nb,
+        pre_segment_args=(transformation, hedge,),
         fill_pos_record=False,
         init_cash=cash,
         cash_sharing=True, 
@@ -267,7 +270,7 @@ def simulate_batch_from_order_func_low_param(
 def low_param_simulate_from_order_func(
     close_data:pd.DataFrame, open_data:pd.DataFrame, entry:float,
     exit:float, burnin:int=500, delta:float=1e-5, vt:float=1.0, 
-    mode:str="default", cash:int=100_000, commission:float=0.0008, 
+    transformation:str="default", cash:int=100_000, commission:float=0.0008, 
     slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
     hedge:str="dollar",
 ):
@@ -275,7 +278,7 @@ def low_param_simulate_from_order_func(
         close_data,
         order_func_nb, 
         open_data.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=pre_group_func_nb2, 
+        pre_group_func_nb=pre_group_func_nb, 
         pre_group_args=(
             entry, 
             exit, 
@@ -284,8 +287,8 @@ def low_param_simulate_from_order_func(
             order_size, 
             burnin,
         ),
-        pre_segment_func_nb=pre_segment_func_nb2, 
-        pre_segment_args=(mode, hedge,),
+        pre_segment_func_nb=pre_segment_func_nb, 
+        pre_segment_args=(transformation, hedge,),
         fill_pos_record=False,  # a bit faster
         init_cash=cash,
         cash_sharing=True, 
@@ -293,26 +296,13 @@ def low_param_simulate_from_order_func(
         freq=freq
     )
 
-def _analyze_results(pf, interval, burnin, rf):
-    """Analyze output portfolio object for BATCH results"""
-    total_return = pf.total_return()    # Extract total return for each param
-    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
-    dur = extract_duration(pf, interval) # Extract median trade duration in `interval`
-    trades = number_of_trades(pf)
-    profit_ratio = calculate_profit_ratio(pf)
-    sharpe = custom_sharpe_ratio(pf, burnin, rf)
-    sortino = custom_sortino_ratio(pf, burnin, rf)
-    res = pd.concat(
-        [total_return, wr, dur, trades, profit_ratio, sharpe, sortino], 
-        axis=1,
-    )
-    return res
 
-def simulate_rolling_ou_model(
+def simulate_rolling_ols_model(
     close_data:pd.DataFrame, open_data:pd.DataFrame, period:int=60, 
     upper_entry:float=1.25, upper_exit:float=0.75, lower_entry:float=-1.25, 
-    lower_exit:float=-0.50, cash:int=100_000, slippage:float=0.0010, 
-    order_size:float=0.10, freq:str='60T', commission:float=0.0008, 
+    lower_exit:float=-0.50, cash:int=100_000, slippage:float=0.0010,
+    order_size:float=0.10, freq:str='60T', commission:float=0.0008,
+    hedge:str='beta', transformation:str='logret', standard_score:str='sscore',
 ):
     """Leverage Rolling OLS to estimate Ornstein-Uhlenbeck process. Trade based on 
     standardized spread measures. This strategy is as outlined in Avallaneda et al.
@@ -326,7 +316,7 @@ def simulate_rolling_ou_model(
         close_data,
         order_func_nb, 
         open_data.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=ou_pre_group_func_nb, 
+        pre_group_func_nb=ols_pre_group_func_nb, 
         pre_group_args=(
             period, 
             upper_entry, 
@@ -335,8 +325,10 @@ def simulate_rolling_ou_model(
             lower_exit, 
             order_size,
         ),
-        pre_segment_func_nb=ou_pre_segment_func_nb, 
-        pre_segment_args=(),
+        pre_segment_func_nb=ols_pre_segment_func_nb, 
+        pre_segment_args=(
+            transformation, hedge, standard_score,
+        ),
         fill_pos_record=False,  # a bit faster
         init_cash=cash,
         cash_sharing=True, 
@@ -344,10 +336,11 @@ def simulate_rolling_ou_model(
         freq=freq,
     )
 
-def simulate_mult_rolling_ou_model(
+def simulate_mult_rolling_ols_model(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, cash:int=100_000, 
-    order_size:float=0.10, freq:str="h",
+    order_size:float=0.10, freq:str="h", standard_score:str='sscore',
+    hedge:str='beta', transformation:str='logret', 
 ):
     """Simultaneously backtest large set of parameter combinations"""
     # Generate multiIndex columns
@@ -367,9 +360,9 @@ def simulate_mult_rolling_ou_model(
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
         vbt_close_price_mult,
-        order_func_nb, 
+        order_func_nb,
         vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
-        pre_group_func_nb=ou_pre_group_func_nb,
+        pre_group_func_nb=ols_pre_group_func_nb,
         pre_group_args=(
             np.array(param_product[0]),
             np.array(param_product[1]),
@@ -378,13 +371,89 @@ def simulate_mult_rolling_ou_model(
             np.array(param_product[4]),
             order_size,
         ),
-        pre_segment_func_nb=ou_pre_segment_func_nb,
-        pre_segment_args=(),
+        pre_segment_func_nb=ols_pre_segment_func_nb,
+        pre_segment_args=(
+            transformation, hedge, standard_score,
+        ),
+        fill_pos_record=False,
+        init_cash=cash,
+        cash_sharing=True,
+        group_by=param_columns.names,
+        freq=freq,
+    )
+    return pf
+
+def simulate_batch_rolling_ols_model(
+    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    commission:float=0.0008, slippage:float=0.0005, hedge:str="beta",
+    cash:int=100_000, order_size:float=0.10, interval:str="minutes", 
+    freq:str=None, rf:float=0.00, transformation:str='logret', 
+    standard_score:str='sscore',
+):
+    """Test pre-batched parameters on Rolling Ornstein-Uhlenbeck Model from Avallaneda et al. (2008)"""
+    # Generate multiIndex columns
+    param_tuples = list(zip(*params.values()))
+    param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
+
+    # We need two price columns per param combination
+    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+
+    # Simulate the portfolio and return portfolio object
+    pf = vbt.Portfolio.from_order_func(
+        vbt_close_price_mult,
+        order_func_nb,
+        vbt_open_price_mult.values, commission, slippage,  # *args for order_func_nb
+        pre_group_func_nb=ols_pre_group_func_nb,
+        pre_group_args=(
+            np.array(params["period"]),
+            np.array(params["upper_entry"]),
+            np.array(params["upper_exit"]),
+            np.array(params["lower_entry"]),
+            np.array(params["lower_exit"]),
+            order_size,
+        ),
+        pre_segment_func_nb=ols_pre_segment_func_nb,
+        pre_segment_args=(
+            transformation, hedge, standard_score,
+        ),
         fill_pos_record=False,
         init_cash=cash,
         cash_sharing=True, 
         group_by=param_columns.names,
         freq=freq,
     )
-    return pf
+
+    res = _analyze_results(pf, interval, rf=rf)
+    gc.collect()
+    return res
+
+
+############################################################################
+##                           Copula Models                                ##
+############################################################################
+
+
+
+############################################################################
+##                           Novel Models                                 ##
+############################################################################
+
+
+#############################    Analysis     ###############################
+
+def _analyze_results(pf, interval, burnin=None, rf=None):
+    """Analyze output portfolio object for BATCH results"""
+    total_return = pf.total_return()    # Extract total return for each param
+    wr = extract_wr(pf) # Extract win rate on net long-short trade for each param
+    dur = extract_duration(pf, interval) # Extract median trade duration in `interval`
+    trades = number_of_trades(pf)
+    profit_ratio = calculate_profit_ratio(pf)
+    sharpe = custom_sharpe_ratio(pf, burnin, rf)
+    sortino = custom_sortino_ratio(pf, burnin, rf)
+    res = pd.concat(
+        [total_return, wr, dur, trades, profit_ratio, sharpe, sortino], 
+        axis=1,
+    )
+    return res
 

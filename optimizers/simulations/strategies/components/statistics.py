@@ -165,7 +165,7 @@ def number_of_trades(pf) -> pd.Series:
 
     return trades_ser
 
-def custom_sharpe_ratio(pf, burnin, rf=0.05):
+def custom_sharpe_ratio(pf, burnin=None, rf=0.00):
     """Calculate sharpe ratio on gross outlay for net long-short trades"""
     ser = {}
     
@@ -175,7 +175,10 @@ def custom_sharpe_ratio(pf, burnin, rf=0.05):
 
     for idx, gr in g:
         pnl = (gr.groupby('Entry Timestamp').sum().PnL.resample('D').sum())
-        val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        if burnin:
+            val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        else:
+            val = pf.value().loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
         res = pd.concat([pnl, val], axis=1, keys=['pnl', 'val'])
         res = res.fillna(0)
         res['ret'] = res.pnl / res.val
@@ -189,7 +192,7 @@ def custom_sharpe_ratio(pf, burnin, rf=0.05):
 
     return ser
 
-def custom_sortino_ratio(pf, burnin, rf=0.05):
+def custom_sortino_ratio(pf, burnin=None, rf=0.00):
     """Calculate sortino ratio on gross outlay for net long-short trades"""
     ser = {}
     
@@ -199,7 +202,10 @@ def custom_sortino_ratio(pf, burnin, rf=0.05):
 
     for idx, gr in g:
         pnl = (gr.groupby('Entry Timestamp').sum().PnL.resample('D').sum())
-        val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        if burnin:
+            val = pf.value()[burnin:].loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
+        else:
+            val = pf.value().loc[:,idx].resample('D').asfreq().fillna(pf.value().loc[:,idx][0])
         res = pd.concat([pnl, val], axis=1, keys=['pnl', 'val'])
         res = res.fillna(0)
         res['ret'] = res.pnl / res.val

@@ -72,7 +72,7 @@ if __name__ == "__main__":
             cv="sliding",
             slippage=0.0010,
             hedge="dollar",
-            mode="default",
+            transformation=None,
             n_splits=3,
             trade_const=0.250,   # Recommended a 0.200
             sr_const=1.800,      # Recommended at 1.600

@@ -1,16 +1,21 @@
 import gc
 import pandas as pd
-from .order import simulate_batch_from_order_func, simulate_batch_from_order_func_low_param
-from .order import simulate_from_order_func
-from .statistics import score_results, return_results
-from .statistics import _weighted_average, _calculate_mse
+from .order import (
+    simulate_batch_lqe_model, 
+    simulate_batch_from_order_func_low_param,
+    simulate_batch_rolling_ols_model,
+)
+from .order import simulate_lqe_model
+from .strategies.components.statistics import score_results, return_results
+from .strategies.components.statistics import _weighted_average, _calculate_mse
 
 
 def trainParams(
     close_train_sets:list, open_train_sets:list, params:dict, commission:float=0.0008, 
     slippage:float=0.0010, burnin:int=500, cash:int=100_000, order_size:float=0.10, 
-    freq:None or str=None, hedge:str="dollar", close_validation_sets:None or list=None, 
-    open_validation_sets:None or list=None, mode:str="default", model='LQE2', rf=0.05,
+    freq:None or str=None, hedge:str="dollar", close_validation_sets:list=None, 
+    open_validation_sets:list=None, transformation:str="default", model='LQE2', rf=0.05,
+    standard_score='zscore',
 ) -> pd.DataFrame:
     """Train param batch against cross-validated training (and validation) data.
 
@@ -32,7 +37,7 @@ def trainParams(
     hedge : str, optional
     close_validation_sets : None or list, optional
     open_validation_sets : None or list, optional
-    mode : str, optional
+    transformation : str, optional
 
     Returns
     -------
@@ -52,8 +57,8 @@ def trainParams(
     test_data = zip(close_train_sets, open_train_sets)
 
     for close_prices, open_prices in test_data:
-        if model == 'LQE1':
-            df = simulate_batch_from_order_func(
+        if model == 'LQE':
+            df = simulate_batch_lqe_model(
                 close_prices, open_prices, params,
                 burnin=burnin,
                 cash=cash,
@@ -62,12 +67,13 @@ def trainParams(
                 order_size=order_size,
                 freq=freq,
                 hedge=hedge,
-                mode=mode,
-                rf=rf
+                transformation=transformation,
+                rf=rf,
+                standard_score=standard_score,
             )
             fitness_results.append(df)
             gc.collect()
-        if model == 'LQE2':
+        elif model == 'LQE2':
             df = simulate_batch_from_order_func_low_param(
                 close_prices, open_prices, params,
                 burnin=burnin,
@@ -77,11 +83,28 @@ def trainParams(
                 order_size=order_size,
                 freq=freq,
                 hedge=hedge,
-                mode=mode,
-                rf=rf
+                model=transformation,
+                rf=rf,
             )
             fitness_results.append(df)
             gc.collect()
+        elif model == 'OLS':
+            df = simulate_batch_rolling_ols_model(
+                close_prices, open_prices, params,
+                cash=cash,
+                commission=commission,
+                slippage=slippage,
+                order_size=order_size,
+                freq=freq,
+                hedge=hedge,
+                rf=rf,
+                transformation=transformation,
+                standard_score=standard_score,
+            )
+            fitness_results.append(df)
+            gc.collect()
+        else:
+            raise ValueError(f'No {model} model found in simulations')
 
     # If we pass validation data we will process it as well
     if close_validation_sets and open_validation_sets:
@@ -89,7 +112,7 @@ def trainParams(
 
         for close_prices, open_prices in validate_data:
             if model == 'LQE1':
-                df = simulate_batch_from_order_func(
+                df = simulate_batch_lqe_model(
                     close_prices, open_prices, params,
                     burnin=burnin,
                     cash=cash,
@@ -122,7 +145,7 @@ def trainParams(
 def testParams(
     close_test_sets:list, open_test_sets:list, period:float, upper:float,
     lower:float, exit:float, delta:float=1e-5, vt:float=1.0, burnin:int=500, 
-    mode:str="default", cash:int=100_000, commission:float=0.0008, 
+    transformation:str="default", cash:int=100_000, commission:float=0.0008, 
     slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
     hedge:str="dollar",
 ):
@@ -143,7 +166,7 @@ def testParams(
     delta : float, optional
     vt : float, optional
     burnin : int, optional
-    mode : str, optional
+    transformation : str, optional
     commission : float, optional
     slippage : float, optional
     burnin : int, optional
@@ -169,7 +192,7 @@ def testParams(
     test_data = zip(close_test_sets, open_test_sets)
 
     for close_prices, open_prices in test_data:
-        pf = simulate_from_order_func(
+        pf = simulate_lqe_model(
             close_prices, open_prices, 
             period=period,
             upper=upper,
@@ -184,7 +207,7 @@ def testParams(
             order_size=order_size,
             freq=freq,
             hedge=hedge,
-            mode=mode,
+            transformation=transformation,
         )
 
         test_res.append(pf)

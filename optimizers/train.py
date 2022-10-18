@@ -6,7 +6,7 @@ from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
 from .simulations._cv_orders import trainParams, testParams
-from .simulations.statistics import generate_random_sample
+from .simulations.strategies.components.statistics import generate_random_sample
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
 from .utils.cross_validators import vbt_cv_kfold_constructor
@@ -22,12 +22,12 @@ def geneticCV(
     n_batch_size:int or None=None, max_workers:int or None=None, model='LQE2',
     slippage:float=0.0005, cash:int=100_000, freq:str="h", rf:int=0.00,
     rank_method="default", elitism:float or dict=None, mutation_style="random",
-    mutation_steps:float or dict=0.10, commission:float=0.0008, 
+    mutation_steps:float or dict=0.10, commission:float=0.0008, standard_score='zscore',
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
-    pickle_results:bool=False, hedge="dollar", trade_const:float=1.0, cv:str="timeseries",
-    mode="default", validation_set:None or float=None, ret_const:float=1.0,
-    sr_const:float=1.0, wr_const:float=1.0, total_return_min:float=0.00, 
-    duration_cap:int=1440, dur_const:float=0.50, trade_floor:int=35
+    hedge='beta', trade_const:float=1.0, cv:str="timeseries", ret_const:float=1.0,
+    transformation=None, validation_set:None or float=None, 
+    sr_const:float=1.0, wr_const:float=1.0, total_return_min:float=0.00,
+    duration_cap:int=1440, dur_const:float=0.50, trade_floor:int=35,
 ) -> pd.DataFrame:
     """Optimize pairs trading strategy via genetic algorithm
 
@@ -165,9 +165,10 @@ def geneticCV(
                 repeat(hedge),
                 repeat(open_validate_dfs),
                 repeat(close_validate_dfs),
-                repeat(mode),
+                repeat(transformation),
                 repeat(model),
                 repeat(rf),
+                repeat(standard_score),
             ):
                 results.append(result)
 

@@ -2,11 +2,14 @@ import numpy as np
 from numba import njit
 from collections import namedtuple
 from vectorbt.base.reshape_fns import flex_select_auto_nb
-from .components.predictors import KF
+from .components.models import KF
+from .components.preprocessors import (
+    log_price_transform, log_return_transform, cummulative_return_transform,
+)
 
 Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'signal', 'status', 'mtm'))
 Params = namedtuple("Params", ('entry', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
-Transformations = namedtuple("Transformations", ("cumm_x", "cumm_y", "logr_x", "logr_y", "log_x", "log_y"))
+Transformations = namedtuple("Transformations", ("log", "logret", "cumlog"))
 
 
 @njit
@@ -18,21 +21,14 @@ def pre_group_func_nb(c, _entry, _exit, _delta, _vt, _order_size, _burnin):
     spread = np.full(c.target_shape[0], np.nan, dtype=np.float_)
     signal = np.full(c.target_shape[0], np.nan, dtype=np.float_)
 
-    # Calculate the transformation upfront to reference (if needed) later
-    x_arr = c.close[:, c.from_col]
-    y_arr = c.close[:, c.from_col + 1]
-    cumm_x = np.full(x_arr.shape, 0, dtype=np.float_)
-    cumm_y = np.full(y_arr.shape, 0, dtype=np.float_)
-    logr_x = np.full(x_arr.shape, 0, dtype=np.float_)
-    logr_y = np.full(y_arr.shape, 0, dtype=np.float_)
-    cumm_x[1:] = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1]).cumsum()
-    cumm_y[1:] = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1]).cumsum()
-    logr_x[1:] = np.log1p((x_arr[1:] - x_arr[:-1]) / x_arr[:-1])
-    logr_y[1:] = np.log1p((y_arr[1:] - y_arr[:-1]) / y_arr[:-1])
-    log_x = np.log(x_arr)
-    log_y = np.log(y_arr)
 
-    transformations = Transformations(cumm_x, cumm_y, logr_x, logr_y, log_x, log_y) # Store the transformations here
+    # Calculate the transformation upfront to reference (if needed) later
+    arr = c.close[:, :c.from_col+c.group_len] # This will pull out the closes as an Nx2 array
+    log = log_price_transform(arr)
+    logret = log_return_transform(arr)
+    cumlog = cummulative_return_transform(arr)
+
+    transformations = Transformations(log, logret, cumlog) # Store the transformations here
 
     # Add matrix names and descriptions as notes for posterior review
     theta = np.full(2, 0, dtype=np.float_)          # 2x1 matrix representing beta, intercept from filter
@@ -62,22 +58,22 @@ def pre_group_func_nb(c, _entry, _exit, _delta, _vt, _order_size, _burnin):
     
 
 @njit
-def pre_segment_func_nb(c, memory, params, size, transformations, mode, hedge):
+def pre_segment_func_nb(c, memory, params, size, transformations, transform, hedge):
     """Prepare the current segment (= row within group)."""
 
     if c.i > 0: # Ignore the first element as it is always zero when transformation is applied
-        if mode == "default":
+        if not transform or transform == "default":
             X = c.close[c.i, c.from_col]         
             y = c.close[c.i, c.from_col + 1]
-        if mode == "cummlog":
-            X = transformations.cumm_x[c.i]
-            y = transformations.cumm_y[c.i]
-        if mode == "logret":
-            X = transformations.logr_x[c.i]
-            y = transformations.logr_y[c.i]
-        if mode == "log":
-            X = transformations.log_x[c.i]
-            y = transformations.log_y[c.i]
+        elif transform == "cumlog":
+            X = transformations.cumlog[c.i, c.from_col]
+            y = transformations.cumlog[c.i, c.from_col + 1]
+        elif transform == "logret":
+            X = transformations.logret[c.i, c.from_col]
+            y = transformations.logret[c.i, c.from_col + 1]
+        elif transform == "log":
+            X = transformations.log[c.i, c.from_col]
+            y = transformations.log[c.i, c.from_col + 1]
 
         Rt, Ct, theta, e, Qt = KF(X, y, memory.Rt, memory.Ct, memory.theta, params.delta, params.vt)
 

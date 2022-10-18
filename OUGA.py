@@ -44,12 +44,11 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(5, 1005, 5, dtype=int),
-        "upper": np.arange(0.5, 5.1, 0.1, dtype=float),
-        "lower": np.arange(0.5, 5.1, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.0, 3.1, 0.1, dtype=float),
-        "delta": np.unique(np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten()),
-        "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
+        "period": np.arange(100, 2000, 10, dtype=int),
+        "upper_entry": np.arange(1.00, 4.55, 0.05, dtype=float),
+        "upper_exit": np.arange(0.00, 1.55, 0.05, dtype=float),
+        "lower_entry": np.arange(1.00, 4.55, 0.05, dtype=float) * -1.0,
+        "lower_exit": np.arange(0.00, 1.55, 0.05, dtype=float) * -1.0,
     }
 
     assets = ['CAKE-USDT', 'AAVE-USDT']
@@ -72,20 +71,18 @@ if __name__ == "__main__":
             rank_method="rank_space",
             elitism={0: 0.005, 25: 0.500},
             diversity={0: 2.00, 25: 0.200},
-            cv="sliding",
+            cv='sliding',
             slippage=0.0020,
-            burnin=800,
-            transformation="logret",
-            hedge="beta",
+            hedge='beta',
             n_splits=3,
             trade_const=0.235,   # Recommended a 0.225
             sr_const=1.100,      # Recommended at 0.350
             wr_const=0.300,      # Recommended at 1.350
             trade_floor=40,
-            model='LQE',
+            model='OLS',
             freq='h',
             standard_score='zscore',
+            transformation='logret',
         )
 
     logging.info("Genetic algorithm search completed.")
-    df.to_csv("results.csv")
