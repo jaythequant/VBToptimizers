@@ -1,4 +1,5 @@
 import numpy as np
+import numba as nb
 from numba import njit
 
 
@@ -24,15 +25,14 @@ def KF(X, y, R, C, theta, delta=1e-5, vt=1):
     
     return R, C, theta, et, Qt
 
-
 @njit
 def OLS(X:np.array, y:np.array) -> tuple:
     """Vectorized OLS regression (fully numba compatible)"""
     # np.linalg.inv raises warning. Need to fix this in the future
+    # X = np.ascontiguousarray(X, dtype=np.float_) <- Causes type error but stackexchange says will fix?
     _X = np.vstack((X, np.ones(len(X)))).T
     params = np.dot(np.linalg.inv(np.dot(_X.T, _X)), np.dot(_X.T, y))
     return params
-
 
 @njit
 def discretized_OU(residuals:np.array, alternative_calc:bool=False) -> float:
@@ -52,3 +52,20 @@ def discretized_OU(residuals:np.array, alternative_calc:bool=False) -> float:
         s = -m / sigma_eq
 
     return s
+
+@njit(parallel=True, cache=True)
+def rollingOLS_nb(XX, yy, window):
+    """Parallelized Numba-optimized rolling linear regression"""
+    assert XX.shape == yy.shape
+
+    params = np.full((XX.shape[0],2), np.nan, dtype=np.float_)
+
+    for i in nb.prange(0, XX.shape[0]):
+        if i > window - 2:
+            window_slice = slice(max(0, i + 1 - window), i + 1)
+            xvec = XX[window_slice]
+            yvec = yy[window_slice]
+            results = OLS(xvec, yvec)
+            params[i,0:2] = results # Beta, alpha
+
+    return params

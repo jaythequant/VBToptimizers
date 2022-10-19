@@ -16,4 +16,5 @@ def order_func_nb(c, size, price, commperc, slippage):
         fees=commperc,
         slippage=slippage,
         lock_cash=False,
+        log=True,
     )

@@ -93,7 +93,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         size[1] = np.nan
         return (size,)
 
-    if c.i > params.burnin + params.period - 1:
+    if c.i > params.burnin - 1:
 
         # rolling statistics are calculated using a window (=period) of error terms
         # This window can be specified as a slice
@@ -104,17 +104,14 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
             spread_mean = np.mean(memory.spread[window_slice])
             spread_std = np.std(memory.spread[window_slice])
             memory.zscore[c.i] = (memory.spread[c.i] - spread_mean) / spread_std
-        elif standardization == 'zscorealt':
-            # Somewhat experimental zscore calculate opertaing under assumption that sum of spread =0
-            spread_mean = np.mean(memory.spread[window_slice])
-            spread_std = np.std(memory.spread[window_slice])
-            memory.zscore[c.i] = (-spread_mean) / spread_std
         elif standardization == 'sscore':
             # Calculate rolling s-score as presented in Avallenda et al. 2008
             memory.zscore[c.i] = discretized_OU(memory.spread[window_slice])
         elif standardization == 'sscorealt':
             # Experimentatal s-score using final residual for s-score calc (despite Avallenda saying it is unneccesary)
             memory.zscore[c.i] = discretized_OU(memory.spread[window_slice], alternative_calc=True)
+
+        print(memory.zscore[c.i])
 
         outlay = c.last_value[c.group] * params.order_size
 
@@ -149,19 +146,11 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
                     elif np.abs(theta[0]) >= 1:
                         size[0] = outlay / c.close[c.i - 1, c.from_col]
                         size[1] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
-                elif hedge == "delta":
+                elif hedge == "betaunit":
                     # Delta-based hedge strategy. We assume that delta shares y == beta * delta shares x
                     delta_y = outlay / c.close[c.i - 1, c.from_col + 1] # n *shares* of y
                     size[0] = delta_y * theta[0] # beta n *shares* of x
                     size[1] = -delta_y
-                elif hedge == "reversebeta":
-                    # Experimental strategy where we reverse the dollar-based beta hedge
-                    if np.abs(theta[0]) < 1:
-                        size[0] = outlay / c.close[c.i - 1, c.from_col]
-                        size[1] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
-                    elif np.abs(theta[0]) >= 1:
-                        size[0] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col]
-                        size[1] = -outlay / c.close[c.i - 1, c.from_col + 1]
                 c.call_seq_now[0] = 1 # Execute short sale first
                 c.call_seq_now[1] = 0 # Use funds to purchase long side
                 memory.status[0] = 1
@@ -181,24 +170,16 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
                     elif np.abs(theta[0]) >= 1:
                         size[0] = -outlay / c.close[c.i - 1, c.from_col]
                         size[1] = (outlay / theta[0]) / c.close[c.i - 1, c.from_col + 1]
-                elif hedge == "delta":
+                elif hedge == "betaunit":
                     delta_y = outlay / c.close[c.i - 1, c.from_col + 1] # n *shares* of y
                     size[0] = -(delta_y * theta[0]) # beta n *shares* of x
                     size[1] = delta_y
-                elif hedge == "reversebeta":
-                    # Experimental strategy where we reverse the dollar-based beta hedge
-                    if np.abs(theta[0]) < 1:
-                        size[0] = -outlay / c.close[c.i - 1, c.from_col]
-                        size[1] = (outlay * theta[0]) / c.close[c.i - 1, c.from_col + 1]
-                    elif np.abs(theta[0]) >= 1:
-                        size[0] = -(outlay / theta[0]) / c.close[c.i - 1, c.from_col]
-                        size[1] = outlay / c.close[c.i - 1, c.from_col + 1]
                 c.call_seq_now[0] = 0  # execute the second order first to release funds early
                 c.call_seq_now[1] = 1
                 memory.status[0] = 2
 
         elif memory.status[0] == 1:
-            if np.abs(memory.zscore[c.i - 1]) < params.exit:
+            if memory.zscore[c.i - 1] < params.exit:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 0
@@ -208,7 +189,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
                 memory.mtm[1] = 0
             
         elif memory.status[0] == 2:
-            if np.abs(memory.zscore[c.i - 1]) < params.exit:
+            if memory.zscore[c.i - 1] > params.exit:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 1

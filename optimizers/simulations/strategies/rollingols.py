@@ -73,8 +73,6 @@ def ols_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         memory.sscore[c.i] = discretized_OU(resids)
     elif standarization == 'zscore':
         memory.sscore[c.i] = (resids[-1] - resids.mean()) / resids.std()
-    elif standarization == 'zscorealt':
-        memory.sscore[c.i] = -resids.mean() / resids.std()
     elif standarization == 'sscorealt':
         memory.sscore[c.i] = discretized_OU(resids, alternative_calc=True)
 

@@ -4,7 +4,7 @@ import configparser
 import numpy as np
 from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
-from optimizers.train import geneticCV
+from optimizers.ga import geneticCV
 from optimizers.pipes.pipe import SQLPipe
 
 load_dotenv()

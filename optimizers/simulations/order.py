@@ -107,6 +107,7 @@ def simulate_lqe_model(
         Portfolio object with a large amount of review data regarding the simulation
         results. See https://vectorbt.dev/ for information.
     """
+    lower = -lower if lower > 0 else lower
     return vbt.Portfolio.from_order_func(
         close_data,
         order_func_nb, 
