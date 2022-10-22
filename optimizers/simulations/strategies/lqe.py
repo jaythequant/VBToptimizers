@@ -111,8 +111,6 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
             # Experimentatal s-score using final residual for s-score calc (despite Avallenda saying it is unneccesary)
             memory.zscore[c.i] = discretized_OU(memory.spread[window_slice], alternative_calc=True)
 
-        print(memory.zscore[c.i])
-
         outlay = c.last_value[c.group] * params.order_size
 
         # A crude mark-to-market calculation
