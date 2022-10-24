@@ -99,7 +99,7 @@ def geneticCV(
 
     Returns
     -------
-    pd.DataFrame
+    DataFrame
         DataFrame with multiIndex of parameters and columns showing fitness score and
         supporting statistics for the final generation in the GA process. 
     """

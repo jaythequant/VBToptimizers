@@ -85,4 +85,3 @@ if __name__ == "__main__":
         )
 
     logging.info("Genetic algorithm search completed.")
-    df.to_csv("results.csv")

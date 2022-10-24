@@ -1,4 +1,5 @@
 from numba import njit
+import numpy as np
 from vectorbt.portfolio import nb as portfolio_nb
 from vectorbt.portfolio.enums import SizeType
 

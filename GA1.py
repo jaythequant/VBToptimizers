@@ -13,6 +13,7 @@ USER = os.getenv('psql_username')
 PASS = os.getenv('psql_password')
 DATABASE = 'crypto'
 SCHEMA = 'bihourly'
+INTERVAL = '30T'
 
 config = configparser.ConfigParser()
 config.read("geneticconf.ini")
@@ -35,7 +36,7 @@ logging.basicConfig(
     ]
 )
 
-pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, interval='30T')
+pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ if __name__ == "__main__":
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
-        "period": np.arange(50, 2005, 5, dtype=int),
+        "period": np.arange(20, 2005, 5, dtype=int),
         "upper": np.arange(0.5, 5.1, 0.1, dtype=float),
         "lower": np.arange(0.5, 5.1, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.0, 3.1, 0.1, dtype=float),
@@ -52,8 +53,8 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['TRX-USDT', 'ETH-USDT']
-    slicer = 0 # Slice off first few months of trading to reduce early volatility
+    assets = ['DOGE-USDT', 'AXS-USDT']
+    slicer = -25000 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)
     closes = df.xs('close', level=1, axis=1)[slicer:]
@@ -74,18 +75,17 @@ if __name__ == "__main__":
             diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0010,
-            burnin=800,
+            burnin=600,
             transformation="log",
             hedge="beta",
-            n_splits=4,
-            trade_const=0.235,   # Recommended a 0.225
+            n_splits=3,
+            trade_const=0.240,   # Recommended a 0.225
             sr_const=1.100,      # Recommended at 0.350
             wr_const=0.300,      # Recommended at 1.350
-            trade_floor=20,
+            trade_floor=40,
             model='LQE',
             freq='30T',
             standard_score='zscore',
         )
 
     logging.info("Genetic algorithm search completed.")
-    df.to_csv("results.csv")

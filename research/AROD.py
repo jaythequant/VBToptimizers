@@ -5,11 +5,11 @@ import numpy as np
 import concurrent.futures
 import statsmodels.api as sm
 from itertools import combinations, repeat
-from statistics import (englegranger, hurst, halflife)
+from .statistics import (englegranger, hurst, halflife)
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from kucoincli.client import Client
-from pipes.sql import SQLPipe
+from .pipes.sql import SQLPipe
 
 load_dotenv()
 
@@ -64,7 +64,7 @@ def test_pairs(comb, schema, interval, min_rows=8640, slice=1000, transformation
     if df.shape[0] < min_rows:
         return
     if transformation == "log":
-        df = np.log(df).dropna()
+        df = np.log(df)
     x = df.iloc[:,0]
     y = df.iloc[:,1]
     results = englegranger(x, y)
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     transformation = "log"
     trend = "c"
     maxlag = 1
-    drop_n_rows = 1000
+    slice_to = -17280
     min_rows = 17280
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
@@ -97,7 +97,7 @@ if __name__ == "__main__":
         stablepairs=False,
         leveragetokens=False,
         price_currency="usdt",
-        row_min=17280,
+        row_min=min_rows,
     )
     
     marginable = get_marginable(client)
@@ -112,7 +112,7 @@ if __name__ == "__main__":
             repeat(SCHEMA), 
             repeat(INTERVAL), 
             repeat(min_rows), 
-            repeat(drop_n_rows),
+            repeat(slice_to),
             repeat(transformation)
         ):
             if result:
