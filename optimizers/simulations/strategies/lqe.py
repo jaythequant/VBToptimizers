@@ -7,7 +7,7 @@ from .components.preprocessors import (
     log_price_transform, log_return_transform, cummulative_return_transform,
 )
 
-Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status', 'mtm'))       
+Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status', 'mtm', 'ts'))       
 Params = namedtuple("Params", ('period', 'upper', 'lower', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
 Transformations = namedtuple("Transformations", ("log", "logret", "cumlog"))
 
@@ -36,8 +36,9 @@ def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order
 
     status = np.full(1, 0, dtype=np.int_)
     mtm = np.full(2, 0, dtype=np.float_)
+    ts = np.full(2, 0, dtype=np.float_) # Container for timestamping trades based on index
 
-    memory = Memory(theta, Rt, Ct, spread, zscore, status, mtm)
+    memory = Memory(theta, Rt, Ct, spread, zscore, status, mtm, ts)
     
     # Treat each param as an array with value per group, and select the combination of params for this group
     period = flex_select_auto_nb(np.asarray(_period), 0, c.group, True)
@@ -128,8 +129,8 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         # Check if any bound is crossed
         # Since zscore is calculated using close, use zscore of the previous step
         # This way we are executing signals defined at the previous bar
-        if memory.zscore[c.i - 1] > params.upper and not memory.status[0]:
-            # if memory.zscore[c.i - 1] < params.upper + 1:
+        if memory.zscore[c.i - 1] > params.upper and not memory.status[0] and theta[0] > 0.05:
+            memory.ts[0] = c.i
             if hedge == "dollar":
                 size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
                 size[1] = -outlay / c.close[c.i - 1, c.from_col + 1] # y asset
@@ -156,8 +157,8 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         # Note that x_t = c.close[c.i - 1, c.from_col]
         # and y_t = c.close[c.i - 1, c.from_col + 1]
 
-        elif memory.zscore[c.i - 1] < params.lower and not memory.status[0]:
-            # if memory.zscore[c.i - 1] > params.lower - 1:
+        elif memory.zscore[c.i - 1] < params.lower and not memory.status[0] and theta[0] > 0.05:
+            memory.ts[0] = c.i
             if hedge == "dollar":
                 size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset
                 size[1] = outlay / c.close[c.i - 1, c.from_col + 1] # y asset
@@ -177,7 +178,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
             memory.status[0] = 2
 
         elif memory.status[0] == 1:
-            if memory.zscore[c.i - 1] < params.exit:
+            if memory.zscore[c.i - 1] < params.exit or c.i == memory.ts[0]+336:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 0
@@ -187,7 +188,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
                 memory.mtm[1] = 0
             
         elif memory.status[0] == 2:
-            if memory.zscore[c.i - 1] > params.exit:
+            if memory.zscore[c.i - 1] > params.exit or c.i == memory.ts[0]+336:
                 size[0] = 0
                 size[1] = 0
                 c.call_seq_now[0] = 1

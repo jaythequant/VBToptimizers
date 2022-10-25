@@ -6,3 +6,4 @@ test.ipynb
 test.py
 *.csv
 .DS_Store
+*.xlsx

@@ -3,7 +3,6 @@ import pandas as pd
 from .order import (
     simulate_batch_lqe_model, 
     simulate_batch_from_order_func_low_param,
-    simulate_batch_rolling_ols_model,
 )
 from .order import simulate_lqe_model
 from .strategies.components.statistics import score_results, return_results
@@ -88,21 +87,6 @@ def trainParams(
             )
             fitness_results.append(df)
             gc.collect()
-        elif model == 'OLS':
-            df = simulate_batch_rolling_ols_model(
-                close_prices, open_prices, params,
-                cash=cash,
-                commission=commission,
-                slippage=slippage,
-                order_size=order_size,
-                freq=freq,
-                hedge=hedge,
-                rf=rf,
-                transformation=transformation,
-                standard_score=standard_score,
-            )
-            fitness_results.append(df)
-            gc.collect()
         else:
             raise ValueError(f'No {model} model found in simulations')
 
@@ -128,9 +112,9 @@ def trainParams(
     
     # Calculate mean results for each param across folds
     train_cv_results = pd.concat(fitness_results, axis=1)
+    train_cv_results = train_cv_results.fillna(0)
     weighted_wr = _weighted_average(train_cv_results)
     mean_results = train_cv_results.groupby(by=train_cv_results.columns, axis=1).mean()
-    # median_results = train_cv_results.groupby(by=train_cv_results.columns, axis=1).median()
 
     if validate_results:
         validate_cv_results = pd.concat(validate_results, axis=1)

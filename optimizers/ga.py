@@ -5,8 +5,7 @@ import pandas as pd
 from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
-from .simulations._cv_orders import trainParams, testParams
-from .simulations.strategies.components.statistics import generate_random_sample
+from .simulations._cv_orders import trainParams
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
 from .cross_validators import vbt_cv_kfold_constructor

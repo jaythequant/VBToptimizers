@@ -53,7 +53,7 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['DOGE-USDT', 'AXS-USDT']
+    assets = ['FIL-USDT', 'THETA-USDT']
     slicer = -25000 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)
@@ -84,7 +84,7 @@ if __name__ == "__main__":
             wr_const=0.300,      # Recommended at 1.350
             trade_floor=40,
             model='LQE',
-            freq='30T',
+            freq=INTERVAL,
             standard_score='zscore',
         )
 
