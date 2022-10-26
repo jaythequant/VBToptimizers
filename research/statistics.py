@@ -1,6 +1,8 @@
 import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 from statsmodels.tsa.stattools import coint
+from numba import njit
 
 
 def englegranger(x, y, trend="c", maxlag=1):
@@ -47,3 +49,77 @@ def hurst(ts, maxlag=200):
 
     # Return the Hurst exponent from the polyfit output
     return poly[0]*2.0
+
+def rolling_zscore_nb(resids, window):
+
+    zscore = np.full(resids.shape[0], np.nan, dtype=np.float_)
+
+    for i in range(0, resids.shape[0]):
+        if i > window - 2:
+            window_slice = slice(max(0, i + 1 - window), i + 1)
+            s = resids[window_slice]
+            zscore[i] = (resids[i] - np.mean(s)) / np.std(s)
+
+    return zscore
+
+@njit
+def KF(X, y, R, C, theta, delta=1e-5, vt=1):
+    """Kalman Filter as outlined by E. Chan in Algorithmic Trading pg. 78"""
+    Wt = (delta / (1 - delta)) * np.eye(2)
+
+    if np.isnan(R).any():
+        R = np.ones((2,2))
+    else:   
+        R = C + Wt
+
+    F = np.asarray([X, 1.0], dtype=np.float_).reshape((1,2))
+
+    yhat = F.dot(theta) # Prediction
+    et = y - yhat       # Calculate error term
+
+    Qt = F.dot(R).dot(F.T) + vt
+    At = R.dot(F.T) / Qt
+    theta = theta + At.flatten() * et   # Update theta
+    C = R - At * F.dot(R)
+
+    return R, C, theta, et, Qt
+
+
+def kalmanfilter(data:pd.DataFrame, delta:float=1e-5, vt:float=1.0, export_df:bool=True) -> tuple or pd.DataFrame:
+    """Numba-acceralated Kalman filter wrapper"""
+    theta = np.full(2, 0, dtype=np.float_)          # 2x1 matrix representing beta, intercept from filter
+    Rt = np.full((2,2), np.nan, dtype=np.float_)    # Generates matrix of [[0,0],[0,0]]
+    Ct = np.full((2,2), np.nan, dtype=np.float_)    # C matrix is correctly implemented here
+
+    thetas = []
+    C = []
+    R = []
+    errors = []
+
+    for xt, yt in zip(data.iloc[:, 0], data.iloc[:, 1]):
+        Rt, Ct, theta, et, _ = KF(xt, yt, Rt, Ct, theta, delta=delta, vt=vt)
+        thetas.append(theta)
+        C.append(Ct)
+        R.append(Rt)
+        errors.append(et)
+
+    thetas = np.vstack(thetas)
+
+    C = np.vstack(C)
+    R = np.vstack(R)
+
+    C = C.reshape((int(C.shape[0] / 2), C.shape[1], 2))
+    R = R.reshape((int(R.shape[0] / 2), R.shape[1], 2))
+
+    errors = np.vstack(errors)
+
+    if export_df:
+        res = pd.DataFrame(thetas, index=data.index)
+        res.rename(columns={
+            0: "slope",
+            1: "intercept",
+        }, inplace=True)
+    else:
+        res = thetas, C, errors, R # State_mean, state_covariance
+
+    return res

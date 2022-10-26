@@ -11,9 +11,6 @@ load_dotenv()
 
 USER = os.getenv('psql_username')
 PASS = os.getenv('psql_password')
-DATABASE = 'crypto'
-SCHEMA = 'bihourly'
-INTERVAL = '30T'
 
 config = configparser.ConfigParser()
 config.read("geneticconf.ini")
@@ -36,6 +33,10 @@ logging.basicConfig(
     ]
 )
 
+DATABASE = 'crypto'
+SCHEMA = 'bihourly'
+INTERVAL = '30T'
+
 pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
 logger = logging.getLogger(__name__)
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['FIL-USDT', 'THETA-USDT']
+    assets = ['DOT-USDT', 'XPR-USDT']
     slicer = -25000 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)

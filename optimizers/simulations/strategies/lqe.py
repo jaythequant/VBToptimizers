@@ -113,6 +113,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
             memory.zscore[c.i] = discretized_OU(memory.spread[window_slice], alternative_calc=True)
 
         outlay = c.last_value[c.group] * params.order_size
+        nigo_trade = np.abs(memory.zscore[c.i - 1]) > 6
 
         # A crude mark-to-market calculation
         # if memory.status[0] != 0 and memory.status[0] != 3:
@@ -129,7 +130,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         # Check if any bound is crossed
         # Since zscore is calculated using close, use zscore of the previous step
         # This way we are executing signals defined at the previous bar
-        if memory.zscore[c.i - 1] > params.upper and not memory.status[0] and theta[0] > 0.05:
+        if memory.zscore[c.i - 1] > params.upper and not memory.status[0] and theta[0] > 0.05 and not nigo_trade:
             memory.ts[0] = c.i
             if hedge == "dollar":
                 size[0] = outlay / c.close[c.i - 1, c.from_col] # X asset
@@ -157,7 +158,7 @@ def lqe_pre_segment_func_nb(c, memory, params, size, transformations, transform,
         # Note that x_t = c.close[c.i - 1, c.from_col]
         # and y_t = c.close[c.i - 1, c.from_col + 1]
 
-        elif memory.zscore[c.i - 1] < params.lower and not memory.status[0] and theta[0] > 0.05:
+        elif memory.zscore[c.i - 1] < params.lower and not memory.status[0] and theta[0] > 0.05 and not nigo_trade:
             memory.ts[0] = c.i
             if hedge == "dollar":
                 size[0] = -outlay / c.close[c.i - 1, c.from_col] # X asset

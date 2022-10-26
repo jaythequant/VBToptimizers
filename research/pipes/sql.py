@@ -13,7 +13,18 @@ class SQLPipe:
         self.schema = schema
         self.interval = interval
 
-    def query_pair(self, pair, only_close=False, ascending=True, warn=True):
+    @staticmethod
+    def __prep_assets(assets):
+        """Format asset(s) to SQL table format"""
+        is_string = True if isinstance(assets, str) else False
+        assets = [assets] if not isinstance(assets, (list, tuple)) else assets
+        assets = [asset.replace("-", "").lower() for asset in assets]
+        assets = assets[0] if is_string else assets
+        return assets
+
+    def query_asset(self, asset, only_close=False, ascending=True, warn=True):
+        """Query asset as pandas DataFrame from SQL database"""
+        pair = self.__prep_assets(asset)
         if only_close:
             get_pair = f"""
                 SELECT
@@ -38,8 +49,7 @@ class SQLPipe:
 
     def query_pairs_trading_backtest(self, assets:list):
         """Query set of assets for use with pairs trading backtesting framework"""
-        assets = [assets] if isinstance(assets, str) else assets
-        tables = [asset.replace("-", "").lower() for asset in assets]
+        tables = self.__prep_assets(assets)
 
         dfs = []
 
@@ -63,10 +73,7 @@ class SQLPipe:
 
     def check_missing_data(self, assets:list):
         """Check for missing bars of data in asset list historic time series"""
-
-        assets = [assets] if isinstance(assets, str) else assets
-        tables = [asset.replace("-", "").lower() for asset in assets]
-
+        tables = self.__prep_assets(assets)
         dfs = []
 
         for table in tables:
@@ -150,4 +157,3 @@ class SQLPipe:
             stats.index = stats.index.str.replace("-", "").str.lower()
             symbols = [s for s in symbols if s in stats[stats >= volume]]            
         return symbols
-
