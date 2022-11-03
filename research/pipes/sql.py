@@ -1,17 +1,18 @@
 import pandas as pd
 import warnings
-import itertools
 from sqlalchemy import create_engine
+from kucoincli.client import Client
 
 
 class SQLPipe:
     """Pipeline from PSQL database into pandas DataFrames"""
 
     def __init__(self, schema, database, username, password, interval):
-
+        """Set initial pipeline parameters by defining a target schema and generating an engine into the SQL database"""
         self.engine = create_engine(f"postgresql+psycopg2://{username}:{password}@localhost/{database}")
         self.schema = schema
         self.interval = interval
+        self.client = Client()
 
     @staticmethod
     def __prep_assets(assets):
@@ -50,7 +51,6 @@ class SQLPipe:
     def query_pairs_trading_backtest(self, assets:list):
         """Query set of assets for use with pairs trading backtesting framework"""
         tables = self.__prep_assets(assets)
-
         dfs = []
 
         for table in tables:
@@ -99,14 +99,28 @@ class SQLPipe:
         return pd.read_sql(query, self.engine)
 
     def get_symbol_list(
-        self, stablepairs=True, leveragetokens=True, price_currency=None, 
-        fiatpair=True, row_min=0, volume=0,
-    ):
-        """
-        Query the database for all trading pairs
-        :self.db: This param is the schema in my SQL db.
-        :self.engine: Engine is SQLAlchemy self.engine object.
-        :row_min: Filters number of rows in table. Note: 45,000 minutes in 1 month.
+        self, stablepairs:bool=True, leveragetokens:bool=True, only_marginable:bool=False,
+        row_min:int=0, quote_curr=None,
+    ) -> list:
+        """Query the database for list of all asset tables
+
+        Parameters
+        ----------
+        stablepairs : bool, optional
+            Set `stablepairs=False` to remove stablevalue-to-stable value trading pairs (e.g. USDC-USDT).
+        leveragetokens : bool, optional
+            Set `leveragetokens=False` to remove 3x leverages tokens (e.g. ETH3S-USDT).
+        only_marginable : bool, optional
+            Set `only_marginable=True` to include only marginable trading pairs.
+        row_min : int, optional
+            Filter list by minimum number of rows in table.
+        quote_curr : str or list, optional
+            Filter return by specified quote currency or currencies
+
+        Returns
+        -------
+        list
+            Filtered list of all table names for trading pairs fitting specified parameters
         """
         query_table_lengths = f"""
                 SELECT 
@@ -121,6 +135,9 @@ class SQLPipe:
                 """
         table_lengths = pd.read_sql(query_table_lengths, self.engine)
         symbols = list(table_lengths[table_lengths["reltuples"] >= row_min]["relname"])
+        if only_marginable:
+            marginable_symbols = self.client.symbols(marginable=True).index.str.replace("-", "").str.lower()
+            symbols = [symbol for symbol in symbols if symbol in marginable_symbols]
         if leveragetokens == False:
             short_lever = "3s"
             long_lever = "3l"
@@ -131,29 +148,12 @@ class SQLPipe:
                 if short_lever not in symbol
             ]
         if stablepairs == False:
-            stabletokens = [
-                "USDT",
-                "USDC",
-                "TUSD",
-                "EUSD",
-                "GUSD",
-                "BUSD",
-                "PAX",
-                "SUSD",
-                "DAI",
-                "USDN",
-                "UST",
-                "CUSD",
-                "OUSD",
-                "USDJ",
-            ]
-            stablepairs = list(itertools.permutations(stabletokens, 2))
-            stablepairs = ["".join(tup).lower() for tup in stablepairs]
+            df = self.client.all_tickers()
+            conditions = (df['high'].astype(float) < 1.01) & (df['low'].astype(float) > 0.990)
+            stablepairs = df[conditions].index.str.replace("-", "").str.lower()
             symbols = [symbol for symbol in symbols if symbol not in stablepairs]
-        if price_currency != None:
-            symbols = [symbol for symbol in symbols if price_currency.lower() in symbol]
-        if volume:
-            stats = self.all_tickers().volValue.astype(float)
-            stats.index = stats.index.str.replace("-", "").str.lower()
-            symbols = [s for s in symbols if s in stats[stats >= volume]]            
+        if quote_curr:
+            df = self.client.symbols(quote=quote_curr)
+            valid_assets = self.__prep_assets(df.index.to_list())
+            symbols = [symbol for symbol in symbols if symbol in valid_assets]
         return symbols

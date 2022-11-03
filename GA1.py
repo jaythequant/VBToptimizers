@@ -9,8 +9,8 @@ from research.pipes.sql import SQLPipe
 
 load_dotenv()
 
-USER = os.getenv('psql_username')
-PASS = os.getenv('psql_password')
+USER = os.getenv('PSQL_USERNAME')
+PASS = os.getenv('PSQL_PASSWORD')
 
 config = configparser.ConfigParser()
 config.read("geneticconf.ini")
@@ -54,7 +54,7 @@ if __name__ == "__main__":
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['DOT-USDT', 'XPR-USDT']
+    assets = ['VRA-USDT', 'KDA-USDT']
     slicer = -25000 # Slice off first few months of trading to reduce early volatility
 
     df = pipe.query_pairs_trading_backtest(assets)

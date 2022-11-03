@@ -5,29 +5,22 @@ import numpy as np
 import concurrent.futures
 import statsmodels.api as sm
 from itertools import combinations, repeat
-from .statistics import (englegranger, hurst, halflife)
+from statistics import (englegranger, hurst, halflife)
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from kucoincli.client import Client
-from .pipes.sql import SQLPipe
+from pipes.sql import SQLPipe
 
 load_dotenv()
 
-USER = os.getenv('psql_username')
-PASS = os.getenv('psql_password')
+USER = os.getenv('PSQL_USERNAME')
+PASS = os.getenv('PSQL_PASSWORD')
 DATABASE = 'crypto'
 SCHEMA = 'bihourly'
 INTERVAL = '30T'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-
-
-def get_marginable(client):
-    """Get list of marginable securites"""
-    tickers = client.symbols(marginable=True).index.to_list()
-    tickers = [ticker.replace("-", "").lower() for ticker in tickers]
-    return tickers
 
 
 def get_historic_data(assets, schema, engine, interval):
@@ -75,43 +68,38 @@ def test_pairs(comb, schema, interval, min_rows=8640, slice=1000, transformation
     res = mod.fit()
     results["hurst"] = hurst(res.resid.values)
     results["halflife"] = halflife(res.resid)
-    return results
+    return results, df
 
 
 if __name__ == "__main__":
 
-    # All of these should be argparse flags?
     transformation = "log"
-    trend = "c"
-    maxlag = 1
-    slice_to = -17280
-    min_rows = 17280
+    slice_to = -17520
+    min_rows = 17520
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
     logging.info("Initializing tests")
-    engine = create_engine("postgresql+psycopg2://james:password@localhost/crypto")
 
     client = Client()
     l = pipe.get_symbol_list(
         stablepairs=False,
         leveragetokens=False,
-        price_currency="usdt",
+        only_marginable=True,
+        quote_curr="USDT",
         row_min=min_rows,
     )
     
-    marginable = get_marginable(client)
-    l = list(set(l) & set(marginable))
-    combs = list(combinations(l, 2))
-    logging.info(f"Produced {len(combs)} unique combinations")
+    pairs = list(combinations(l, 2))
+    logging.info(f"Produced {len(pairs)} unique combinations")
     results = []
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=None) as executor:
         for result in executor.map(
-            test_pairs, combs, 
-            repeat(SCHEMA), 
-            repeat(INTERVAL), 
-            repeat(min_rows), 
+            test_pairs, pairs, 
+            repeat(SCHEMA),
+            repeat(INTERVAL),
+            repeat(min_rows),
             repeat(slice_to),
             repeat(transformation)
         ):
