@@ -55,12 +55,12 @@ if __name__ == "__main__":
     }
 
     assets = ['VRA-USDT', 'KDA-USDT']
-    slicer = -25000 # Slice off first few months of trading to reduce early volatility
+    slicer = -26000 # This is approx. 18-months of 30 minute granularity data
 
     df = pipe.query_pairs_trading_backtest(assets)
     closes = df.xs('close', level=1, axis=1)[slicer:]
     opens = df.xs('open', level=1, axis=1)[slicer:]
-    assert closes.shape[0] > 8640, 'Less than 1 year of backtesting data present'
+    assert closes.shape[0] > 17520, 'Less minimium required backtesting data present'
     assert closes.index.equals(opens.index), 'Open and close indices do not match'
 
     opens, _ = train_test_split(opens, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
@@ -76,7 +76,7 @@ if __name__ == "__main__":
             diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0010,
-            burnin=600,
+            burnin=800,
             transformation="log",
             hedge="beta",
             n_splits=3,

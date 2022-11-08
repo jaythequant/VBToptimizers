@@ -1,26 +1,26 @@
 import gc
 import pandas as pd
+import numpy as np
+from .order import simulate_lqe_model
 from .order import (
     simulate_batch_lqe_model, 
     simulate_batch_from_order_func_low_param,
 )
-from .order import simulate_lqe_model
-from .strategies.components.statistics import score_results, return_results
-from .strategies.components.statistics import _weighted_average, _calculate_mse
+from .strategies.components.statistics import (
+    score_results, return_results, _weighted_average
+)
 
-
-def trainParams(
+def pairs_cross_validator(
     close_train_sets:list, open_train_sets:list, params:dict, commission:float=0.0008, 
     slippage:float=0.0010, burnin:int=500, cash:int=100_000, order_size:float=0.10, 
-    freq:None or str=None, hedge:str="dollar", close_validation_sets:list=None, 
-    open_validation_sets:list=None, transformation:str="default", model='LQE2', rf=0.05,
-    standard_score='zscore',
+    freq:str=None, hedge:str="dollar", transformation:str="default", model='LQE2', 
+    rf=0.00, standard_score='zscore', seed=False,
 ) -> pd.DataFrame:
     """Train param batch against cross-validated training (and validation) data.
 
     Notes
     -----
-    For detailed documentation see `optimizers.simulations._order.simulate_batch_from_order_func`
+    For detailed documentation see `optimizers.simulations.order.simulate_batch_from_order_func`
 
     Parameters
     ----------
@@ -35,28 +35,31 @@ def trainParams(
     freq : None or str, optional
     hedge : str, optional
     close_validation_sets : None or list, optional
-    open_validation_sets : None or list, optional
     transformation : str, optional
+    seed_filter : str, optional
 
     Returns
     -------
     DataFrame
-        Returns a dataframe indexed the the given parameter combinations with a 
-        series of statistics for evaluation of simulation performance.
+        Return a dataframe indexed to parameter combinations with a 
+        series of statistics for evaluating simulation performance.
 
     See Also
     --------
-    * `optimizers.simulations._order.simulate_batch_from_order_func`
+    * `optimizers.simulations.order.simulate_batch_from_order_func`
     * `optimizers.simulations.statistics._weighted_average`
     * `optimizers.simulations.statistics._calculate_mse`
     * `vbt.Portfolio`
     """
     fitness_results = []
-    validate_results = []
     test_data = zip(close_train_sets, open_train_sets)
 
-    for close_prices, open_prices in test_data:
+    for idx, (close_prices, open_prices) in enumerate(test_data):
         if model == 'LQE':
+            if (seed and idx == 0) or not seed:
+                seed_set = np.array([])
+            elif seed and idx != 0:
+                seed_set = pd.concat(close_train_sets[:idx]).values
             df = simulate_batch_lqe_model(
                 close_prices, open_prices, params,
                 burnin=burnin,
@@ -69,6 +72,7 @@ def trainParams(
                 transformation=transformation,
                 rf=rf,
                 standard_score=standard_score,
+                seed=seed_set
             )
             fitness_results.append(df)
             gc.collect()
@@ -89,26 +93,6 @@ def trainParams(
             gc.collect()
         else:
             raise ValueError(f'No {model} model found in simulations')
-
-    # If we pass validation data we will process it as well
-    if close_validation_sets and open_validation_sets:
-        validate_data = zip(close_validation_sets, open_validation_sets)
-
-        for close_prices, open_prices in validate_data:
-            if model == 'LQE1':
-                df = simulate_batch_lqe_model(
-                    close_prices, open_prices, params,
-                    burnin=burnin,
-                    cash=cash,
-                    commission=commission,
-                    slippage=slippage,
-                    order_size=order_size,
-                    freq=freq,
-                    hedge=hedge,
-                    rf=rf
-                )
-                validate_results.append(df)
-                gc.collect()
     
     # Calculate mean results for each param across folds
     train_cv_results = pd.concat(fitness_results, axis=1)
@@ -116,14 +100,7 @@ def trainParams(
     weighted_wr = _weighted_average(train_cv_results)
     mean_results = train_cv_results.groupby(by=train_cv_results.columns, axis=1).mean()
 
-    if validate_results:
-        validate_cv_results = pd.concat(validate_results, axis=1)
-        mse, std = _calculate_mse(train_cv_results, validate_cv_results)
-        results = pd.concat([mean_results, weighted_wr, mse, std], axis=1)
-    else:
-        results = pd.concat([mean_results, weighted_wr], axis=1)
-
-    return results
+    return pd.concat([mean_results, weighted_wr], axis=1)
 
 
 def testParams(

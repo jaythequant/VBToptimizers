@@ -37,3 +37,10 @@ def test_trading_liquidity(lookback=90, interval='1day'):
         liq[curr] = mean_vol
     
     return pd.Series(liq).sort_values(ascending=False)
+
+def get_csv_data(path):
+    """Reads in CSV file exported from SQL db"""
+    df = pd.read_csv(path, index_col="time")
+    df.index = pd.to_datetime(df.index)
+    df = df.astype(float)
+    return df.sort_index(ascending=True)

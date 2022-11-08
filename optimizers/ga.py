@@ -5,7 +5,7 @@ import pandas as pd
 from itertools import repeat
 from .genetic.operators import init_generate_population
 from .genetic.operators import roulette_wheel_selection, crossover, mutation
-from .simulations._cv_orders import trainParams
+from .simulations._cv_orders import pairs_cross_validator
 from .genetic.utils import _handle_duplication
 from .genetic.utils import _batch_populations
 from .cross_validators import vbt_cv_kfold_constructor
@@ -24,7 +24,7 @@ def geneticCV(
     mutation_steps:float or dict=0.10, commission:float=0.0008, standard_score='zscore',
     n_batches:int or None=None, burnin:int=500, diversity:float or dict=0.00,
     hedge='beta', trade_const:float=1.0, cv:str="timeseries", ret_const:float=1.0,
-    transformation=None, validation_set:None or float=None, 
+    transformation=None, validation_set:None or float=None, seed_filter:bool=False,
     sr_const:float=1.0, wr_const:float=1.0, total_return_min:float=0.00,
     duration_cap:int=1440, dur_const:float=0.50, trade_floor:int=35,
 ) -> pd.DataFrame:
@@ -151,7 +151,7 @@ def geneticCV(
         # Execute our cross validation function concurrently on `max_worker` processors
         with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
             for result in executor.map(
-                trainParams, 
+                pairs_cross_validator, 
                 repeat(close_train_dfs), 
                 repeat(open_train_dfs), 
                 batches,
@@ -162,12 +162,11 @@ def geneticCV(
                 repeat(order_size),
                 repeat(freq),
                 repeat(hedge),
-                repeat(open_validate_dfs),
-                repeat(close_validate_dfs),
                 repeat(transformation),
                 repeat(model),
                 repeat(rf),
                 repeat(standard_score),
+                repeat(seed_filter),
             ):
                 results.append(result)
 

@@ -22,8 +22,8 @@ def simulate_lqe_model(
     close_data:pd.DataFrame, open_data:pd.DataFrame, period:float, upper:float,
     lower:float, exit:float, burnin:int=500, delta:float=1e-5, vt:float=1.0, 
     transformation:str=None, cash:int=100_000, commission:float=0.0008, 
-    slippage:float=0.0010, order_size:float=0.10, freq:None or str=None, 
-    hedge:str="beta", standard_score='zscore',
+    slippage:float=0.0010, order_size:float=0.10, freq:str=None, 
+    hedge:str="beta", standard_score='zscore', seed=np.array([]),
 ):
     """Highly configurable pair trade backtest environment built on vectorBT
 
@@ -108,6 +108,8 @@ def simulate_lqe_model(
         results. See https://vectorbt.dev/ for information.
     """
     lower = -lower if lower > 0 else lower
+    if not seed.any():
+        seed = np.full(close_data.shape, 0, dtype=np.float_)
     return vbt.Portfolio.from_order_func(
         close_data,
         order_func_nb, 
@@ -122,6 +124,7 @@ def simulate_lqe_model(
             vt, 
             order_size, 
             burnin,
+            seed,
         ),
         pre_segment_func_nb=lqe_pre_segment_func_nb, 
         pre_segment_args=(transformation, hedge, standard_score),
@@ -137,9 +140,11 @@ def simulate_mult_lqe_model(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict,
     commission:float=0.0008, slippage:float=0.0005, transformation:str=None,
     cash:int=100_000, order_size:float=0.10, burnin:int=500, freq:str="h",
-    hedge:str="beta", standard_score='zscore',
+    hedge:str="beta", standard_score='zscore', seed=np.array([])
 ):
     """Simultaneously backtest large set of parameter combinations"""
+    if not seed.any():
+        seed = np.full(close_prices.shape, 0, dtype=np.float_)
     # Generate multiIndex columns
     param_product = vbt.utils.params.create_param_product(list(params.values()))
 
@@ -185,10 +190,12 @@ def simulate_batch_lqe_model(
     close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, transformation:str=None, 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
-    freq:None or str=None, interval:str="minutes", hedge:str="beta",
-    rf=0.05, standard_score='zscore'
+    freq:str=None, interval:str="minutes", hedge:str="beta",
+    rf=0.00, standard_score='zscore', seed=np.array([]),
 ):
     """Backtest batched param sets [Param sets must be pre-defined]"""
+    if not seed.any():
+        seed = np.full(close_prices.shape, 0, dtype=np.float_)
     # Generate multiIndex columns
     param_tuples = list(zip(*params.values()))
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
@@ -212,6 +219,7 @@ def simulate_batch_lqe_model(
             np.array(params["vt"]), 
             order_size,
             burnin,
+            seed,
         ),
         pre_segment_func_nb=lqe_pre_segment_func_nb,
         pre_segment_args=(transformation, hedge, standard_score),

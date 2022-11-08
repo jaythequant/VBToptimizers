@@ -11,9 +11,22 @@ Memory = namedtuple("Memory", ('theta', 'Ct', 'Rt', 'spread', 'zscore', 'status'
 Params = namedtuple("Params", ('period', 'upper', 'lower', 'exit', 'delta', 'vt', 'order_size', 'burnin'))
 Transformations = namedtuple("Transformations", ("log", "logret", "cumlog"))
 
+@njit
+def seed_filter_params(seed, delta, vt):
+    """Use historic seed data to pre-calculate initial values for theta, R, and C matrix"""
+    theta = np.full(2, 0, dtype=np.float_)
+    Rt = np.full((2,2), np.nan, dtype=np.float_)
+    Ct = np.full((2,2), np.nan, dtype=np.float_)
+    for idx in range(0, seed.shape[0]):
+        bar = seed[idx,:]
+        Rt, Ct, theta, _, _ = KF(bar[0], bar[1], Rt, Ct, theta, delta, vt)
+        theta[0:2] = theta
+        Rt[0], Rt[1] = Rt[0], Rt[1]
+        Ct[0], Ct[1] = Ct[0], Ct[1]
+    return theta, Rt, Ct
 
 @njit
-def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_size, _burnin):
+def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order_size, _burnin, _seed):
     """Prepare the current group (= pair of columns)."""
 
     assert c.group_len == 2
@@ -29,10 +42,12 @@ def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order
 
     transformations = Transformations(log, logret, cumlog) # Store the transformations here
 
-    # Add matrix names and descriptions as notes for posterior review
-    theta = np.full(2, 0, dtype=np.float_)          # 2x1 matrix representing beta, intercept from filter
-    Rt = np.full((2,2), np.nan, dtype=np.float_)    # Generates matrix of [[0,0],[0,0]]
-    Ct = np.full((2,2), np.nan, dtype=np.float_)    # C matrix is correctly implemented here
+    if _seed.sum() > 0:
+        theta, Rt, Ct = seed_filter_params(_seed, _delta, _vt)
+    else:
+        theta = np.full(2, 0, dtype=np.float_)
+        Rt = np.full((2,2), np.nan, dtype=np.float_)
+        Ct = np.full((2,2), np.nan, dtype=np.float_)
 
     status = np.full(1, 0, dtype=np.int_)
     mtm = np.full(2, 0, dtype=np.float_)
