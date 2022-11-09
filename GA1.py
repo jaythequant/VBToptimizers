@@ -9,9 +9,6 @@ from research.pipes.sql import SQLPipe
 
 load_dotenv()
 
-USER = os.getenv('PSQL_USERNAME')
-PASS = os.getenv('PSQL_PASSWORD')
-
 config = configparser.ConfigParser()
 config.read("geneticconf.ini")
 genetic = dict(config["genetic"])
@@ -33,23 +30,25 @@ logging.basicConfig(
     ]
 )
 
-DATABASE = 'crypto'
-SCHEMA = 'bihourly'
-INTERVAL = '30T'
 
-pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
+def main():
+    logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
+    USER = os.getenv('PSQL_USERNAME')
+    PASS = os.getenv('PSQL_PASSWORD')
+    DATABASE = 'crypto'
+    SCHEMA = 'bihourly'
+    INTERVAL = '30T'
 
-if __name__ == "__main__":
+    pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
     logging.info("Initializing genetic cross-validator . . . ")
 
     params = {
         "period": np.arange(20, 2005, 5, dtype=int),
-        "upper": np.arange(0.5, 5.1, 0.1, dtype=float),
-        "lower": np.arange(0.5, 5.1, 0.1, dtype=float) * -1.0,
-        "exit": np.arange(0.0, 3.1, 0.1, dtype=float),
+        "upper": np.arange(0.5, 4.1, 0.1, dtype=float),
+        "lower": np.arange(0.5, 4.1, 0.1, dtype=float) * -1.0,
+        "exit": np.arange(0.0, 2.1, 0.1, dtype=float),
         "delta": np.unique(np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten()),
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
@@ -87,6 +86,11 @@ if __name__ == "__main__":
             model='LQE',
             freq=INTERVAL,
             standard_score='zscore',
+            seed_filter=True,
         )
 
     logging.info("Genetic algorithm search completed.")
+
+
+if __name__ == "__main__":
+    main()

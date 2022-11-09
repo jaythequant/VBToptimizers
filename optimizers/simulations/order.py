@@ -2,10 +2,10 @@ import gc
 import vectorbt as vbt
 import pandas as pd
 import numpy as np
-
 from .strategies.lqe import lqe_pre_group_func_nb, lqe_pre_segment_func_nb
 from .strategies.lqev2 import pre_group_func_nb, pre_segment_func_nb
 from .strategies.rollingols import ols_pre_group_func_nb, ols_pre_segment_func_nb
+from .strategies.components.preprocessors import cummulative_return_transform, log_return_transform
 from .strategies.components.statistics import (
     calculate_profit_ratio, extract_duration, extract_wr, 
     number_of_trades, custom_sharpe_ratio, custom_sortino_ratio,
@@ -100,6 +100,8 @@ def simulate_lqe_model(
         trades will be un-hedged and simply execute 1:1 long-short. If `hedge="beta"`,
         trades will be beta hedged using theta[0] (equivalent to beta_1 in 
         regression).
+    seed : np.array, optional
+        Set a seed using historic data.
 
     Returns
     -------
@@ -108,8 +110,7 @@ def simulate_lqe_model(
         results. See https://vectorbt.dev/ for information.
     """
     lower = -lower if lower > 0 else lower
-    if not seed.any():
-        seed = np.full(close_data.shape, 0, dtype=np.float_)
+    seed = transform_seed(seed, close_data.shape, transformation)
     return vbt.Portfolio.from_order_func(
         close_data,
         order_func_nb, 
@@ -137,14 +138,13 @@ def simulate_lqe_model(
 
 
 def simulate_mult_lqe_model(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict,
+    close_data:pd.DataFrame, open_data:pd.DataFrame, params:dict,
     commission:float=0.0008, slippage:float=0.0005, transformation:str=None,
     cash:int=100_000, order_size:float=0.10, burnin:int=500, freq:str="h",
     hedge:str="beta", standard_score='zscore', seed=np.array([])
 ):
     """Simultaneously backtest large set of parameter combinations"""
-    if not seed.any():
-        seed = np.full(close_prices.shape, 0, dtype=np.float_)
+    seed = transform_seed(seed, close_data.shape, transformation)
     # Generate multiIndex columns
     param_product = vbt.utils.params.create_param_product(list(params.values()))
 
@@ -156,8 +156,8 @@ def simulate_mult_lqe_model(
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
 
     # We need two price columns per param combination
-    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
-    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_close_price_mult = close_data.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_data.vbt.tile(len(param_columns), keys=param_columns)
 
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
@@ -187,22 +187,21 @@ def simulate_mult_lqe_model(
 
 
 def simulate_batch_lqe_model(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    close_data:pd.DataFrame, open_data:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, transformation:str=None, 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
     freq:str=None, interval:str="minutes", hedge:str="beta",
     rf=0.00, standard_score='zscore', seed=np.array([]),
 ):
     """Backtest batched param sets [Param sets must be pre-defined]"""
-    if not seed.any():
-        seed = np.full(close_prices.shape, 0, dtype=np.float_)
+    seed = transform_seed(seed, close_data.shape, transformation)
     # Generate multiIndex columns
     param_tuples = list(zip(*params.values()))
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
 
     # We need two price columns per param combination
-    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
-    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_close_price_mult = close_data.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_data.vbt.tile(len(param_columns), keys=param_columns)
 
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
@@ -234,7 +233,7 @@ def simulate_batch_lqe_model(
     return res
 
 def simulate_batch_from_order_func_low_param(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    close_data:pd.DataFrame, open_data:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, transformation:str="default", 
     cash:int=100_000, order_size:float=0.10, burnin:int=500, 
     freq:None or str=None, interval:str="minutes", hedge:str="dollar",
@@ -246,8 +245,8 @@ def simulate_batch_from_order_func_low_param(
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
 
     # We need two price columns per param combination
-    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
-    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_close_price_mult = close_data.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_data.vbt.tile(len(param_columns), keys=param_columns)
 
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
@@ -346,7 +345,7 @@ def simulate_rolling_ols_model(
     )
 
 def simulate_mult_rolling_ols_model(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    close_data:pd.DataFrame, open_data:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, cash:int=100_000, 
     order_size:float=0.10, freq:str="h", standard_score:str='sscore',
     hedge:str='beta', transformation:str='logret', 
@@ -363,8 +362,8 @@ def simulate_mult_rolling_ols_model(
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
 
     # We need two price columns per param combination
-    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
-    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_close_price_mult = close_data.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_data.vbt.tile(len(param_columns), keys=param_columns)
 
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
@@ -393,7 +392,7 @@ def simulate_mult_rolling_ols_model(
     return pf
 
 def simulate_batch_rolling_ols_model(
-    close_prices:pd.DataFrame, open_prices:pd.DataFrame, params:dict, 
+    close_data:pd.DataFrame, open_data:pd.DataFrame, params:dict, 
     commission:float=0.0008, slippage:float=0.0005, hedge:str="beta",
     cash:int=100_000, order_size:float=0.10, interval:str="minutes", 
     freq:str=None, rf:float=0.00, transformation:str='logret', 
@@ -405,8 +404,8 @@ def simulate_batch_rolling_ols_model(
     param_columns = pd.MultiIndex.from_tuples(param_tuples, names=params.keys())
 
     # We need two price columns per param combination
-    vbt_close_price_mult = close_prices.vbt.tile(len(param_columns), keys=param_columns)
-    vbt_open_price_mult = open_prices.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_close_price_mult = close_data.vbt.tile(len(param_columns), keys=param_columns)
+    vbt_open_price_mult = open_data.vbt.tile(len(param_columns), keys=param_columns)
 
     # Simulate the portfolio and return portfolio object
     pf = vbt.Portfolio.from_order_func(
@@ -466,3 +465,16 @@ def _analyze_results(pf, interval, burnin=None, rf=None):
     )
     return res
 
+def transform_seed(seed:np.array, nobs:tuple, transformation:str) -> np.array:
+    """Apply price transformations to seed"""
+    if not seed.any():
+        seed = np.full(nobs, 0, dtype=np.float_)
+    elif seed.any() and transformation == 'log':
+        seed = np.log(seed)
+    elif seed.any() and transformation == 'cumlog':
+        seed = cummulative_return_transform(seed)
+    elif seed.any() and transformation == 'logret':
+        seed = log_return_transform(seed)
+    else:
+        pass
+    return seed

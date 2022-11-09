@@ -13,7 +13,7 @@ from .strategies.components.statistics import (
 def pairs_cross_validator(
     close_train_sets:list, open_train_sets:list, params:dict, commission:float=0.0008, 
     slippage:float=0.0010, burnin:int=500, cash:int=100_000, order_size:float=0.10, 
-    freq:str=None, hedge:str="dollar", transformation:str="default", model='LQE2', 
+    freq:str=None, hedge:str="dollar", transformation:str="default", model='LQE', 
     rf=0.00, standard_score='zscore', seed=False,
 ) -> pd.DataFrame:
     """Train param batch against cross-validated training (and validation) data.

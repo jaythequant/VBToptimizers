@@ -35,15 +35,17 @@ def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order
     zscore = np.full(c.target_shape[0], np.nan, dtype=np.float_)
 
     # Calculate the transformation upfront to reference (if needed) later
-    arr = c.close[:, :c.from_col+c.group_len] # This will pull out the closes as an Nx2 array
+    arr = c.close[:, :c.from_col+c.group_len] # Pull out close prices as an Nx2 array
     log = log_price_transform(arr)
     logret = log_return_transform(arr)
     cumlog = cummulative_return_transform(arr)
 
-    transformations = Transformations(log, logret, cumlog) # Store the transformations here
+    vt = flex_select_auto_nb(np.asarray(_vt), 0, c.group, True)
+    delta = flex_select_auto_nb(np.asarray(_delta), 0, c.group, True)
 
-    if _seed.sum() > 0:
-        theta, Rt, Ct = seed_filter_params(_seed, _delta, _vt)
+    transformations = Transformations(log, logret, cumlog) # Store the transformations here
+    if _seed.sum() != 0:
+        theta, Rt, Ct = seed_filter_params(_seed, delta, vt)
     else:
         theta = np.full(2, 0, dtype=np.float_)
         Rt = np.full((2,2), np.nan, dtype=np.float_)
@@ -64,7 +66,6 @@ def lqe_pre_group_func_nb(c, _period, _upper, _lower, _exit, _delta, _vt, _order
     burnin = flex_select_auto_nb(np.asarray(_burnin), 0, c.group, True) # Burnin for LQE to obtain accurate estimates
 
     vt = flex_select_auto_nb(np.asarray(_vt), 0, c.group, True)
-    # When using wt it must be multipled by I to return 2x2 perturbance matrix
     delta = flex_select_auto_nb(np.asarray(_delta), 0, c.group, True)
     
     params = Params(period, upper, lower, exit, delta, vt, order_size, burnin)
