@@ -123,3 +123,8 @@ def kalmanfilter(data:pd.DataFrame, delta:float=1e-5, vt:float=1.0, export_df:bo
         res = thetas, C, errors, R # State_mean, state_covariance
 
     return res
+
+def kelly_criterion(win_rate, profit_from_win, potential_loss):
+    """Modified kelly criterion for non-total loss bet sizing"""
+    kelly_pct = (win_rate/np.abs(potential_loss)) - (1 - win_rate)/np.abs(profit_from_win)
+    return kelly_pct

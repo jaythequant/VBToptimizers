@@ -32,13 +32,14 @@ logging.basicConfig(
 
 
 def main():
-    logger = logging.getLogger(__name__)
 
     USER = os.getenv('PSQL_USERNAME')
     PASS = os.getenv('PSQL_PASSWORD')
     DATABASE = 'crypto'
-    SCHEMA = 'bihourly'
-    INTERVAL = '30T'
+    SCHEMA = 'hourly' 
+    INTERVAL = '60T'
+    ASSETS = ['BNB-USDT', 'KCS-USDT']
+    SLICER = -13420 # This is approx. 18-months of 30 minute granularity data
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
@@ -46,20 +47,17 @@ def main():
 
     params = {
         "period": np.arange(20, 2005, 5, dtype=int),
-        "upper": np.arange(0.5, 4.1, 0.1, dtype=float),
-        "lower": np.arange(0.5, 4.1, 0.1, dtype=float) * -1.0,
+        "upper": np.arange(0.5, 3.6, 0.1, dtype=float),
+        "lower": np.arange(0.5, 3.6, 0.1, dtype=float) * -1.0,
         "exit": np.arange(0.0, 2.1, 0.1, dtype=float),
         "delta": np.unique(np.vstack([arr * (0.1 ** np.arange(1,10,1)) for arr in np.arange(1,10,1)]).flatten()),
         "vt": np.unique(np.vstack([arr * (0.1 ** np.arange(1,11,1)) for arr in np.arange(1,21,1)]).flatten()),
     }
 
-    assets = ['VRA-USDT', 'KDA-USDT']
-    slicer = -26000 # This is approx. 18-months of 30 minute granularity data
-
-    df = pipe.query_pairs_trading_backtest(assets)
-    closes = df.xs('close', level=1, axis=1)[slicer:]
-    opens = df.xs('open', level=1, axis=1)[slicer:]
-    assert closes.shape[0] > 17520, 'Less minimium required backtesting data present'
+    df = pipe.query_pairs_trading_backtest(ASSETS)
+    closes = df.xs('close', level=1, axis=1)[SLICER:]
+    opens = df.xs('open', level=1, axis=1)[SLICER:]
+    assert closes.shape[0] > 1000, 'Less minimium required backtesting data present'
     assert closes.index.equals(opens.index), 'Open and close indices do not match'
 
     opens, _ = train_test_split(opens, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
@@ -68,20 +66,20 @@ def main():
     df = geneticCV(
             opens, closes, params,
             n_iter=30,
-            n_batch_size=75,
-            population=1500,
+            n_batch_size=50,
+            population=1000,
             rank_method="rank_space",
             elitism={0: 0.005, 25: 0.500},
             diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0010,
-            burnin=800,
+            burnin=200,
             transformation="log",
             hedge="beta",
             n_splits=3,
-            trade_const=0.240,   # Recommended a 0.225
-            sr_const=1.100,      # Recommended at 0.350
-            wr_const=0.300,      # Recommended at 1.350
+            trade_const=0.240,   # Recommended a 0.235
+            sr_const=1.155,      # Recommended at 1.100
+            wr_const=0.300,      # Recommended at 0.350
             trade_floor=40,
             model='LQE',
             freq=INTERVAL,

@@ -6,7 +6,7 @@ import numpy as np
 def extract_wr(pf) -> pd.Series:
     """
     Extracts win rate from vbt portfolio object as % of net long-short trade
-
+    
     :param pf: VectorBT portfolio object
     :return wr_ser: pandas Series with index as param combination and
         and win rate percentage of net long-short pair trade as values
@@ -16,6 +16,8 @@ def extract_wr(pf) -> pd.Series:
     # Trade records column is a tuple with asset included. 
     # Because we want our net long-short WR not our per asset WR,
     # we have to split the asset out of the column.
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="Win Rate")
     trades["Column"] = trades["Column"].str[:-1]
     # The new trades.Column is just parameter groups without 
     # asset dividing the parameter group which means that the
@@ -49,6 +51,8 @@ def extract_duration(pf, interval) -> int:
         and median hours in any given trade
     """
     trades = pf.trades.records_readable
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="duration")
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
 
@@ -60,7 +64,7 @@ def extract_duration(pf, interval) -> int:
         entries = pd.to_datetime(gr["Entry Timestamp"]).drop_duplicates()
         exits = pd.to_datetime(gr["Exit Timestamp"]).drop_duplicates()
         delta = exits - entries
-        dur = getattr(td.Timedelta(delta.median()).total, interval)
+        dur = getattr(td.Timedelta(delta.mean()).total, interval)
         dur_dict[idx] = dur
     
     dur_ser = pd.Series(dur_dict.values(), index=dur_dict.keys(), name="duration")
@@ -71,6 +75,8 @@ def extract_duration(pf, interval) -> int:
 def calculate_profit_ratio(pf, median=True, handle_inf=10) -> pd.Series:
     """Calculates the profit ratio of median profit to median loss per trade"""
     trades = pf.trades.records_readable
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="profit_ratio")
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
 
@@ -151,6 +157,8 @@ def return_results(test_results):
 def number_of_trades(pf) -> pd.Series:
     """Extracts number of trades from multi-combination portfolio object"""
     trades = pf.trades.records_readable
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="trade_count")
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
 
@@ -170,6 +178,8 @@ def custom_sharpe_ratio(pf, burnin=None, rf=0.00):
     ser = {}
     
     trades = pf.trades.records_readable
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="sharpe_ratio")
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
 
@@ -197,6 +207,8 @@ def custom_sortino_ratio(pf, burnin=None, rf=0.00):
     ser = {}
     
     trades = pf.trades.records_readable
+    if trades.empty:
+        return pd.Series(dtype=np.float_, name="sortino_ratio")
     trades["Column"] = trades["Column"].str[:-1]
     g = trades.groupby("Column")
 

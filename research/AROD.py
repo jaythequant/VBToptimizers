@@ -16,8 +16,8 @@ load_dotenv()
 USER = os.getenv('PSQL_USERNAME')
 PASS = os.getenv('PSQL_PASSWORD')
 DATABASE = 'crypto'
-SCHEMA = 'bihourly'
-INTERVAL = '30T'
+SCHEMA = 'hourly'
+INTERVAL = '60T'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -68,14 +68,14 @@ def test_pairs(comb, schema, interval, min_rows=8640, slice=1000, transformation
     res = mod.fit()
     results["hurst"] = hurst(res.resid.values)
     results["halflife"] = halflife(res.resid)
-    return results, df
+    return results
 
 
 if __name__ == "__main__":
 
     transformation = "log"
-    slice_to = -17520
-    min_rows = 17520
+    slice_to = -13420
+    min_rows = -13420
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
