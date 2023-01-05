@@ -36,9 +36,9 @@ def main():
     USER = os.getenv('PSQL_USERNAME')
     PASS = os.getenv('PSQL_PASSWORD')
     DATABASE = 'crypto'
-    SCHEMA = 'hourly' 
-    INTERVAL = '60T'
-    ASSETS = ['BNB-USDT', 'KCS-USDT']
+    SCHEMA = 'bihourly'
+    INTERVAL = '30T'
+    ASSETS = ['QNT-USDT', 'APT-USDT']
     SLICER = -13420 # This is approx. 18-months of 30 minute granularity data
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)

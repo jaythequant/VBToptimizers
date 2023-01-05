@@ -5,7 +5,7 @@ import numpy as np
 import concurrent.futures
 import statsmodels.api as sm
 from itertools import combinations, repeat
-from statistics import (englegranger, hurst, halflife)
+from statistics import englegranger, hurst, halflife
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
 from kucoincli.client import Client
@@ -16,8 +16,8 @@ load_dotenv()
 USER = os.getenv('PSQL_USERNAME')
 PASS = os.getenv('PSQL_PASSWORD')
 DATABASE = 'crypto'
-SCHEMA = 'hourly'
-INTERVAL = '60T'
+SCHEMA = 'bihourly'
+INTERVAL = '30T'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -44,7 +44,8 @@ def get_historic_data(assets, schema, engine, interval):
 
     df = pd.concat(dfs, axis=1, keys=assets)
     # Locate final NaN value in timeseries and slice out all prior data
-    df = df.loc[df[df.isna().any(axis=1)].index.max():, :][1:]
+    if df.isna().any(axis=1).sum() > 0:
+        df = df.loc[df[df.isna().any(axis=1)].index.max():, :][1:]
     df = df.xs('close', level=1, axis=1)
 
     return df
@@ -58,8 +59,7 @@ def test_pairs(comb, schema, interval, min_rows=8640, slice=1000, transformation
         return
     if transformation == "log":
         df = np.log(df)
-    x = df.iloc[:,0]
-    y = df.iloc[:,1]
+    x, y = df.iloc[:,0], df.iloc[:,1]
     results = englegranger(x, y)
     mod = sm.OLS(
         endog=df.loc[:,results["y"]],
@@ -74,8 +74,8 @@ def test_pairs(comb, schema, interval, min_rows=8640, slice=1000, transformation
 if __name__ == "__main__":
 
     transformation = "log"
-    slice_to = -13420
-    min_rows = -13420
+    slice_to = -13420*2
+    min_rows = -13420*2
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 

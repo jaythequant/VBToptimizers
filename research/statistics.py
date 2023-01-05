@@ -7,8 +7,11 @@ from numba import njit
 
 def englegranger(x, y, trend="c", maxlag=1):
     """Perform engle-granger cointegration test on data stores in PSQL database"""
-    rres = coint(x, y, maxlag=maxlag, trend=trend)
-    lres = coint(y, x, maxlag=maxlag, trend=trend)
+    try:
+        rres = coint(x, y, maxlag=maxlag, trend=trend)
+        lres = coint(y, x, maxlag=maxlag, trend=trend)
+    except ValueError:
+        raise ValueError(x)
     if rres[0] <= lres[0]:
         x, y = x.name.lower(), y.name.lower()
         t = rres[0]
