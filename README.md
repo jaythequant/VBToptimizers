@@ -7,6 +7,6 @@ an extremely complex search problem.
 
 For building the SQL database to feed the backtesting algos, please review KuCoin-Cli, my open-source data science focused API wrapper.
 Additionally, the backtesting back-end is running on a lovely backtesting framework called VectorBT which itself is written on top of 
-numa-accelerated numpy. It may be difficult to tweak or understand the code without a thorough understanding of these these libraries.
+numba-accelerated numpy. It may be difficult to tweak or understand the code without a thorough understanding of these these libraries.
 
 Once life slows down a bit, I intend to thoroughly document the project and refactor the code to an OOP structure.
