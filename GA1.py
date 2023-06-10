@@ -36,10 +36,10 @@ def main():
     USER = os.getenv('PSQL_USERNAME')
     PASS = os.getenv('PSQL_PASSWORD')
     DATABASE = 'crypto'
-    SCHEMA = 'bihourly'
-    INTERVAL = '30T'
-    ASSETS = ['QNT-USDT', 'APT-USDT']
-    SLICER = -13420 # This is approx. 18-months of 30 minute granularity data
+    SCHEMA = 'hourly'
+    INTERVAL = '60T'
+    ASSETS = ['SUN-USDT', 'OCEAN-USDT']
+    SLICER = -7420 # This is approx. 18-months of 30 minute granularity data
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
@@ -65,12 +65,12 @@ def main():
 
     df = geneticCV(
             opens, closes, params,
-            n_iter=30,
+            n_iter=20,
             n_batch_size=50,
             population=1000,
             rank_method="rank_space",
-            elitism={0: 0.005, 25: 0.500},
-            diversity={0: 2.00, 25: 0.200},
+            elitism={0: 0.005, 15: 0.500},
+            diversity={0: 2.00, 15: 0.200},
             cv="sliding",
             slippage=0.0010,
             burnin=200,

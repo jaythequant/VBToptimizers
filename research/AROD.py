@@ -16,8 +16,8 @@ load_dotenv()
 USER = os.getenv('PSQL_USERNAME')
 PASS = os.getenv('PSQL_PASSWORD')
 DATABASE = 'crypto'
-SCHEMA = 'bihourly'
-INTERVAL = '30T'
+SCHEMA = 'hourly'
+INTERVAL = '60T'
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -75,7 +75,7 @@ if __name__ == "__main__":
 
     transformation = "log"
     slice_to = -13420*2
-    min_rows = -13420*2
+    min_rows = 10_000
 
     pipe = SQLPipe(SCHEMA, DATABASE, USER, PASS, INTERVAL)
 
