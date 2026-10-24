@@ -4,7 +4,7 @@ import configparser
 import numpy as np
 from dotenv import load_dotenv
 from sklearn.model_selection import train_test_split
-from optimizers.ga import geneticCV
+from optimizers.genetic import GeneticAlgorithm
 from research.pipes.sql import SQLPipe
 
 load_dotenv()
@@ -65,14 +65,16 @@ if __name__ == "__main__":
     opens, _ = train_test_split(opens, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
     closes, _ = train_test_split(closes, test_size=float(validation['testsize']), train_size=float(validation['trainsize']), shuffle=False)
 
-    df = geneticCV(
+    ga = GeneticAlgorithm(
+        population=1500, n_iter=30, 
+        rank_method="rank_space",
+        elitism={0: 0.005, 25: 0.500},
+        diversity={0: 2.00, 25: 0.200},
+    )
+
+    df = ga.train(
             opens, closes, params,
-            n_iter=30,
             n_batch_size=75,
-            population=1500,
-            rank_method="rank_space",
-            elitism={0: 0.005, 25: 0.500},
-            diversity={0: 2.00, 25: 0.200},
             cv="sliding",
             slippage=0.0010,
             burnin=600,
